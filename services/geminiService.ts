@@ -16,12 +16,23 @@ async function postToAction<T>(action: string, payload: object): Promise<T> {
         body: JSON.stringify({ action, payload }),
     });
 
-    const responseData = await response.json();
-
     if (!response.ok) {
-        throw new Error(responseData.error || `Server responded with ${response.status}`);
+        let errorMsg = `Server responded with ${response.status}: ${response.statusText}`;
+        try {
+            // Attempt to parse a JSON error body from the server function
+            const errorData = await response.json();
+            if (errorData && errorData.error) {
+                errorMsg = errorData.error;
+            }
+        } catch (e) {
+            // The response was not JSON, so we stick with the status text.
+            console.warn("Could not parse error response from server as JSON.");
+        }
+        throw new Error(errorMsg);
     }
-    return responseData as T;
+
+    // If response.ok is true, we expect valid JSON.
+    return response.json() as Promise<T>;
 }
 
 

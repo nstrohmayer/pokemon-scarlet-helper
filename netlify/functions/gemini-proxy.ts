@@ -31,38 +31,89 @@ const getGoogleGenAI = (): GoogleGenAI => {
 };
 
 
+const locationDetailsSchema = {
+    type: Type.OBJECT,
+    properties: {
+        locationName: { type: Type.STRING, description: "The name of the location." },
+        summary: { type: Type.STRING, description: "A brief summary of the location relevant to a Nuzlocke player." },
+        catchablePokemon: {
+            type: Type.ARRAY,
+            description: "List of Pokémon that can be caught here.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING, description: "Name of the Pokémon." },
+                    conditions: { type: Type.STRING, description: "Conditions to encounter (e.g., Tall Grass, Surfing, Day/Night)." }
+                },
+                required: ['name', 'conditions']
+            }
+        },
+        trainers: {
+            type: Type.ARRAY,
+            description: "List of notable trainers in the area.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING, description: "Trainer's name." },
+                    strongestPokemonName: { type: Type.STRING, description: "Name of their strongest Pokémon." },
+                    strongestPokemonLevel: { type: Type.INTEGER, description: "Level of their strongest Pokémon." },
+                    notes: { type: Type.STRING, description: "Any special notes about the trainer." }
+                },
+                required: ['name', 'strongestPokemonName', 'strongestPokemonLevel']
+            }
+        },
+        items: {
+            type: Type.ARRAY,
+            description: "List of important items found here.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING, description: "Name of the item." },
+                    locationDescription: { type: Type.STRING, description: "Where to find the item in the area." }
+                },
+                required: ['name', 'locationDescription']
+            }
+        },
+        staticEncounters: {
+            type: Type.ARRAY,
+            description: "List of static or fixed Pokémon encounters.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    pokemonName: { type: Type.STRING, description: "Name of the Pokémon in the static encounter." },
+                    level: { type: Type.INTEGER, description: "Level of the static encounter Pokémon." },
+                    notes: { type: Type.STRING, description: "Notes about the encounter (e.g., 'Gift Pokémon')." }
+                },
+                required: ['pokemonName', 'level']
+            }
+        }
+    },
+    required: ['locationName', 'summary', 'catchablePokemon', 'trainers', 'items', 'staticEncounters']
+};
+
+
 // Each of these functions will be called by the handler based on the 'action'
 const handleFetchLocationDetails = async (payload: any): Promise<DetailedLocationInfo> => {
   const { locationName } = payload;
   if (!locationName) throw new Error("locationName is required for fetchLocationDetails");
   const genAI = getGoogleGenAI();
 
-  const prompt = `
-    You are an AI assistant for a Pokemon Nuzlocke challenge application.
-    Your task is to provide detailed information about the game location "${locationName}" from the game "Pokémon Scarlet and Violet".
-    CRITICALLY IMPORTANT: Respond ONLY with a single, valid JSON object. ALL property names must be in double quotes. Ensure no trailing commas.
-    The entire response MUST be parseable by JSON.parse(). Do NOT include any text or markdown formatting around the JSON object.
-    The JSON object must conform to the following structure:
-    {
-      "locationName": "string", "summary": "string", "catchablePokemon": [{"name": "string", "conditions": "string"}],
-      "trainers": [{"name": "string", "strongestPokemonName": "string", "strongestPokemonLevel": "number", "notes": "string"}],
-      "items": [{"name": "string", "locationDescription": "string"}],
-      "staticEncounters": [{"pokemonName": "string", "level": "number", "notes": "string"}]
-    }
-    For empty fields, use "" for strings or [] for arrays. Do not omit keys. Provide data for "Pokémon Scarlet and Violet".`;
+  const prompt = `Provide detailed information about the game location "${locationName}" from "Pokémon Scarlet and Violet". Focus on data relevant to a Nuzlocke player.`;
 
     const response: GenerateContentResponse = await genAI.models.generateContent({
         model: GEMINI_MODEL_NAME,
         contents: prompt,
         config: {
             responseMimeType: "application/json",
+            responseSchema: locationDetailsSchema,
             temperature: 0.1,
-            maxOutputTokens: 8192,
-            thinkingConfig: { thinkingBudget: 4096 },
         }
     });
 
     const jsonStr = response.text.trim();
+    if (!jsonStr) {
+        throw new Error(`Gemini returned an empty response for location: ${locationName}`);
+    }
     const parsedData = JSON.parse(jsonStr) as GeminiLocationResponse;
 
     const catchablePokemonProcessed: CatchablePokemonInfo[] = (parsedData.catchablePokemon || []).map(p => ({
@@ -129,29 +180,56 @@ const handleFetchPokemonGenerationInsights = async (payload: any): Promise<Pokem
     return { pokemonName, ...parsedData };
 };
 
+
+const battleStrategySchema = {
+    type: Type.OBJECT,
+    properties: {
+        puzzleInformation: { type: Type.STRING, description: "Information about any gym puzzle or pre-battle challenge." },
+        keyOpponentPokemon: {
+            type: Type.ARRAY,
+            description: "A list of the opponent's key Pokémon.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING, description: "Pokémon's name." },
+                    typeInfo: { type: Type.STRING, description: "Pokémon's type, including Tera Type if applicable (e.g., 'Bug/Flying', 'Tera Type: Bug')." },
+                    notes: { type: Type.STRING, description: "Important notes like key moves, abilities, or held items." }
+                },
+                required: ['name', 'typeInfo', 'notes']
+            }
+        },
+        recommendedPokemonTypes: {
+            type: Type.ARRAY,
+            description: "A list of Pokémon types that are effective in this battle.",
+            items: { type: Type.STRING }
+        },
+        nuzlockeTips: { type: Type.STRING, description: "Overall strategy and tips for a Nuzlocke run. In this string, wrap Pokémon names in {{...}} and location names in [[...]] for the frontend to parse." }
+    },
+    required: ['puzzleInformation', 'keyOpponentPokemon', 'recommendedPokemonTypes', 'nuzlockeTips']
+};
+
+
 const handleFetchBattleStrategy = async (payload: any): Promise<BattleStrategyDetails> => {
     const { battleNode } = payload;
     if (!battleNode?.significantBattleName || !battleNode.id) throw new Error("A valid battleNode is required for fetchBattleStrategy");
     const genAI = getGoogleGenAI();
     
-    const prompt = `
-    Provide a detailed battle strategy for the significant battle: "${battleNode.significantBattleName}" at location "${battleNode.name}" in "Pokémon Scarlet and Violet".
-    Respond ONLY with a single, valid JSON object with all keys double-quoted. Do not include extra text.
-    Use this structure:
-    {
-      "puzzleInformation": "string",
-      "keyOpponentPokemon": [{"name": "string", "typeInfo": "string", "notes": "string"}],
-      "recommendedPokemonTypes": ["string"],
-      "nuzlockeTips": "string"
-    }
-    In nuzlockeTips, wrap Pokémon names in {{...}} and locations in [[...]].`;
+    const prompt = `Provide a detailed Nuzlocke battle strategy for the significant battle: "${battleNode.significantBattleName}" at location "${battleNode.name}" in "Pokémon Scarlet and Violet".`;
 
     const response = await genAI.models.generateContent({
         model: GEMINI_MODEL_NAME,
         contents: prompt,
-        config: { responseMimeType: "application/json", temperature: 0.1, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 4096 } }
+        config: { 
+            responseMimeType: "application/json",
+            responseSchema: battleStrategySchema,
+            temperature: 0.1
+        }
     });
-    const parsedData = JSON.parse(response.text) as GeminiBattleStrategyResponse;
+    const jsonStr = response.text.trim();
+    if (!jsonStr) {
+        throw new Error(`Gemini returned an empty response for battle: ${battleNode.significantBattleName}`);
+    }
+    const parsedData = JSON.parse(jsonStr) as GeminiBattleStrategyResponse;
     return { battleId: battleNode.id, ...parsedData };
 };
 
