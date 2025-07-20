@@ -20,11 +20,8 @@ const ChatBubble: React.FC<{ message: ChatMessage; gameLocations: StoryHelperPro
     );
 };
 
-export const StoryHelper: React.FC<StoryHelperProps> = ({
+export const StoryHelper: React.FC<Omit<StoryHelperProps, 'apiKeyMissing'>> = ({
   checkpoints,
-  nextBattleName,
-  levelCap,
-  apiKeyMissing,
   gameLocations,
   customGoals,
   addCustomGoal,
@@ -84,7 +81,7 @@ export const StoryHelper: React.FC<StoryHelperProps> = ({
         } else {
             setStrategyError(null);
             setExpandedBattleId(battleId);
-            if (!battleStrategies[battleId] && !apiKeyMissing) {
+            if (!battleStrategies[battleId]) {
                 setIsLoadingStrategy(true);
                 try {
                     const details = await fetchBattleStrategyFromGemini(battleNode);
@@ -102,10 +99,7 @@ export const StoryHelper: React.FC<StoryHelperProps> = ({
 
 
     const significantBattles = checkpoints.filter(c => c.significantBattleLevel);
-    let nextBattleIndex = significantBattles.findIndex(b => !completedBattles.has(b.id));
-    if (nextBattleIndex === -1 && significantBattles.length > 0) { // All battles completed
-        nextBattleIndex = significantBattles.length;
-    }
+    const nextBattleIndex = significantBattles.findIndex(b => !completedBattles.has(b.id));
 
     const TypeBadge: React.FC<{ type: string; className?: string }> = ({ type, className = '' }) => {
         const typeColors: Record<string, string> = {
@@ -161,7 +155,6 @@ export const StoryHelper: React.FC<StoryHelperProps> = ({
                                         </div>
                                         {isExpanded && (
                                             <div id={`battle-details-${battle.id}`} className="px-4 pt-3 pb-4 border-t border-slate-600/50 animate-fadeIn space-y-4">
-                                                {apiKeyMissing && <p className="text-center text-yellow-400 text-sm">API key is missing. Cannot load battle strategies.</p>}
                                                 {isLoadingStrategy && (
                                                     <div className="flex items-center justify-center gap-2 text-slate-300">
                                                         <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-sky-400"></div>
@@ -239,25 +232,16 @@ export const StoryHelper: React.FC<StoryHelperProps> = ({
                                     onChange={(e) => setNewGoalText(e.target.value)}
                                     placeholder="e.g., Beat the first gym"
                                     className="flex-grow bg-slate-700/50 border border-slate-600 rounded-md px-3 py-2 text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-sky-500 outline-none transition-colors"
-                                    disabled={isAiGoalLoading}
                                 />
                                 <div className="flex gap-2">
-                                    <button type="submit" className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-md shadow-sm transition-colors disabled:opacity-50" disabled={!newGoalText.trim() || isAiGoalLoading}>
+                                    <button type="submit" className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-md shadow-sm transition-colors disabled:opacity-50" disabled={!newGoalText.trim()}>
                                         Add
                                     </button>
-                                     <button type="button" onClick={handleAddGoalWithAi} className="flex-1 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-md shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2" disabled={apiKeyMissing || !newGoalText.trim() || isAiGoalLoading}>
-                                        {isAiGoalLoading ? (
-                                            <>
-                                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                                            <span>Thinking...</span>
-                                            </>
-                                        ) : (
-                                            "Think ✨"
-                                        )}
+                                     <button type="button" onClick={handleAddGoalWithAi} className="flex-1 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-md shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2" disabled={!newGoalText.trim()}>
+                                        Add Goal
                                     </button>
                                 </div>
                                  {aiGoalError && <p className="text-red-400 text-xs mt-1">{aiGoalError}</p>}
-                                 {apiKeyMissing && !isAiGoalLoading && <p className="text-yellow-400 text-xs mt-1">AI features disabled. API key is missing.</p>}
                             </form>
                             <ul className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                 {customGoals.length > 0 ? customGoals.map(goal => (
@@ -299,59 +283,52 @@ export const StoryHelper: React.FC<StoryHelperProps> = ({
                 <section>
                     <h2 className="text-2xl font-bold text-sky-300 mb-4">Chat with Story Helper</h2>
                      <div className="bg-slate-800/70 p-4 rounded-xl border border-slate-700 h-full flex flex-col min-h-[400px]">
-                        {apiKeyMissing ? (
-                            <div className="text-center m-auto">
-                                <p className="text-red-400">AI Helper is unavailable.</p>
-                                <p className="text-slate-400 text-sm">API Key is not configured.</p>
-                            </div>
-                        ) : (
-                            <>
-                            <div ref={chatContainerRef} className="flex-grow space-y-4 overflow-y-auto pr-2 mb-4">
-                                {chatHistory.length === 0 && !isChatLoading && (
-                                    <div className="flex items-center justify-center h-full">
-                                        <p className="text-slate-400 text-center">Ask a question about what to do next!</p>
-                                    </div>
-                                )}
-                                {chatHistory.map((msg, index) => (
-                                    <ChatBubble 
-                                        key={index}
-                                        message={msg}
-                                        gameLocations={gameLocations}
-                                        onPokemonNameClick={onPokemonNameClick}
-                                        onLocationNameClick={onLocationNameClick}
-                                    />
-                                ))}
-                                {isChatLoading && (
-                                    <div className="flex justify-start">
-                                        <div className="max-w-md lg:max-w-lg px-4 py-2 rounded-xl bg-slate-600/50 text-slate-200">
-                                            <div className="flex items-center gap-2">
-                                                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-sky-400"></div>
-                                                <span className="text-sm italic">AI is typing...</span>
-                                            </div>
+                        <>
+                        <div ref={chatContainerRef} className="flex-grow space-y-4 overflow-y-auto pr-2 mb-4">
+                            {chatHistory.length === 0 && !isChatLoading && (
+                                <div className="flex items-center justify-center h-full">
+                                    <p className="text-slate-400 text-center">Ask a question about what to do next!</p>
+                                </div>
+                            )}
+                            {chatHistory.map((msg, index) => (
+                                <ChatBubble 
+                                    key={index}
+                                    message={msg}
+                                    gameLocations={gameLocations}
+                                    onPokemonNameClick={onPokemonNameClick}
+                                    onLocationNameClick={onLocationNameClick}
+                                />
+                            ))}
+                            {isChatLoading && (
+                                <div className="flex justify-start">
+                                    <div className="max-w-md lg:max-w-lg px-4 py-2 rounded-xl bg-slate-600/50 text-slate-200">
+                                        <div className="flex items-center gap-2">
+                                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-sky-400"></div>
+                                            <span className="text-sm italic">AI is typing...</span>
                                         </div>
                                     </div>
-                                )}
-                                 {chatError && <p className="text-red-400 text-sm">{chatError}</p>}
-                            </div>
-                            <form onSubmit={handleChatSubmit} className="flex gap-2 mt-auto">
-                                <input
-                                    type="text"
-                                    value={chatInput}
-                                    onChange={e => setChatInput(e.target.value)}
-                                    placeholder="Ask for advice..."
-                                    className="flex-grow bg-slate-700/50 border border-slate-600 rounded-md px-3 py-2 text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-purple-500 outline-none transition-colors"
-                                    disabled={isChatLoading}
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={isChatLoading || !chatInput.trim()}
-                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-md shadow-sm transition-colors disabled:opacity-50"
-                                >
-                                    Send
-                                </button>
-                            </form>
-                            </>
-                        )}
+                                </div>
+                            )}
+                             {chatError && <p className="text-red-400 text-sm">{chatError}</p>}
+                        </div>
+                        <form onSubmit={handleChatSubmit} className="flex gap-2 mt-auto">
+                            <input
+                                type="text"
+                                value={chatInput}
+                                onChange={e => setChatInput(e.target.value)}
+                                placeholder="Ask for advice..."
+                                className="flex-grow bg-slate-700/50 border border-slate-600 rounded-md px-3 py-2 text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-purple-500 outline-none transition-colors"
+                                disabled={isChatLoading}
+                            />
+                            <button
+                                type="submit"
+                                disabled={isChatLoading || !chatInput.trim()}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-md shadow-sm transition-colors disabled:opacity-50"
+                            >
+                                Send
+                            </button>
+                        </form>
+                        </>
                     </div>
                 </section>
             </div>

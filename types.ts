@@ -464,7 +464,6 @@ export interface NavigatorDisplayProps {
   apiResponse: string | null;
   apiError: string | null;
   onReset: () => void;
-  apiKeyMissing: boolean;
   onPokemonNameClick: (pokemonName: string) => void;
   onLocationNameClick: (location: GameLocationNode) => void;
   gameLocations: GameLocationNode[];
@@ -586,7 +585,6 @@ export interface StoryHelperProps {
   nextBattleLocation: string | null;
   levelCap: number | null;
   team: TeamMember[];
-  apiKeyMissing: boolean;
   gameLocations: GameLocationNode[]; // For FormattedResponse
 
   // From useBattleTracker hook

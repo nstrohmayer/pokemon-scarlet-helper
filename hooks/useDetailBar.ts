@@ -6,7 +6,7 @@ import {
 } from '../types';
 import { fetchPokemonDetails, fetchAbilityDetails, fetchFullMoveDetails, fetchPokemonGenerationInsights } from '../services/pokeApiService';
 
-export const useDetailBar = (apiKeyMissing: boolean) => {
+export const useDetailBar = () => {
   const [activeBottomBarView, setActiveBottomBarView] = useState<'pokemon' | 'ability' | 'move' | null>(null);
   const [selectedPokemonDetailData, setSelectedPokemonDetailData] = useState<PokemonDetailData | null>(null);
   const [selectedAbilityDetailData, setSelectedAbilityDetailData] = useState<AbilityDetailData | null>(null);
@@ -35,19 +35,17 @@ export const useDetailBar = (apiKeyMissing: boolean) => {
       setIsLoadingDetail(false); // Stop loading after base details are shown
 
       // Then, fetch generation insights without blocking the UI
-      if (!apiKeyMissing) {
-        try {
-            const insights = await fetchPokemonGenerationInsights(details.name);
-            setSelectedPokemonDetailData(prevDetails => 
-                prevDetails ? { ...prevDetails, generationInsights: insights } : null
-            );
-        } catch (insightsErr) {
-            console.warn(`Could not fetch Gen 9 insights for ${details.name}:`, insightsErr);
-            // Optionally set an error state for insights specifically
-            setSelectedPokemonDetailData(prevDetails => 
-                prevDetails ? { ...prevDetails, generationInsights: null } : null // Indicate that fetching failed
-            );
-        }
+      try {
+          const insights = await fetchPokemonGenerationInsights(details.name);
+          setSelectedPokemonDetailData(prevDetails => 
+              prevDetails ? { ...prevDetails, generationInsights: insights } : null
+          );
+      } catch (insightsErr) {
+          console.warn(`Could not fetch Gen 9 insights for ${details.name}:`, insightsErr);
+          // Optionally set an error state for insights specifically
+          setSelectedPokemonDetailData(prevDetails => 
+              prevDetails ? { ...prevDetails, generationInsights: null } : null // Indicate that fetching failed
+          );
       }
     } catch (err) {
       console.error(`Error fetching Pokémon details for ${pokemonNameOrId}:`, err);
@@ -55,7 +53,7 @@ export const useDetailBar = (apiKeyMissing: boolean) => {
       setActiveBottomBarView(null);
       setIsLoadingDetail(false);
     }
-  }, [apiKeyMissing]);
+  }, []);
 
   const handleAbilityNameClick = useCallback(async (abilityName: string) => {
     setIsLoadingDetail(true);
