@@ -1,0 +1,7 @@
+
+{
+  "name": "Pokémon Scarlet & Violet Nuzlocke Navigator",
+  "description": "An application to help track progress and plan strategies for Pokémon Scarlet and Violet Nuzlocke challenges, using Gemini API for location-specific data.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
