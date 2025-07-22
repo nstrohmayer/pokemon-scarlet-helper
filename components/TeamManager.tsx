@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { TeamMember, TeamManagerProps, AddTeamMemberData } from '../types';
 
@@ -155,7 +156,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {team.length > 0 ? (
           team.map(member => (
             <PokemonTeamCard 
@@ -171,7 +172,9 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
             />
           ))
         ) : (
-          <p className="text-slate-400 italic text-center py-4">Your team is empty. Add Pokémon via the detail view!</p>
+          <div className="lg:col-span-2">
+            <p className="text-slate-400 italic text-center py-4">Your team is empty. Add Pokémon via the detail view!</p>
+          </div>
         )}
       </div>
       {/* Manual Add Pokemon Form Removed */}

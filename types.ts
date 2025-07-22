@@ -1,5 +1,8 @@
 
 
+
+
+
 export interface GameLocationNode {
   id: string;
   name: string;
@@ -22,14 +25,15 @@ export interface ItemInfo {
   locationDescription: string;
 }
 
-export interface StaticEncounterInfo {
-  pokemonName: string;
-  level: number;
-  notes?: string;
+export interface KeyEventInfo {
+  name: string;
+  description: string;
+  type: 'Reward' | 'Event' | 'Interaction';
 }
 
 export interface CatchablePokemonInfo {
   name:string;
+  pokemonId: number;
   conditions?: string; // e.g., "Day only", "SOS Battle", "Surfing"
 }
 
@@ -38,7 +42,6 @@ export interface LocationDetailsDisplayProps {
   IconPokeball: React.ElementType;
   IconTrainer: React.ElementType;
   IconItem: React.ElementType;
-  IconBattle: React.ElementType;
   onPokemonNameClick: (pokemonName: string) => void;
   currentLocationId: string | null; // ID of the currently starred location
   onSetCurrentLocation: (locationNodeId: string) => void; // Function to set a location as current
@@ -53,7 +56,7 @@ export interface DetailedLocationInfo {
   catchablePokemon: CatchablePokemonInfo[];
   trainers: TrainerInfo[];
   items: ItemInfo[];
-  staticEncounters: StaticEncounterInfo[];
+  keyEvents: KeyEventInfo[];
 }
 
 export interface AddTeamMemberData {
@@ -96,6 +99,7 @@ export interface GeminiLocationResponse {
   summary?: string;
   catchablePokemon: Array<{
     name: string;
+    pokemonId: number;
     conditions: string; 
   }>;
   trainers: Array<{
@@ -108,10 +112,10 @@ export interface GeminiLocationResponse {
     name: string;
     locationDescription: string;
   }>;
-  staticEncounters: Array<{
-    pokemonName: string;
-    level: number;
-    notes?: string;
+  keyEvents: Array<{
+    name: string;
+    description: string;
+    type: 'Reward' | 'Event' | 'Interaction';
   }>;
 }
 
@@ -464,6 +468,7 @@ export interface NavigatorDisplayProps {
   apiResponse: string | null;
   apiError: string | null;
   onReset: () => void;
+  apiKeyMissing: boolean;
   onPokemonNameClick: (pokemonName: string) => void;
   onLocationNameClick: (location: GameLocationNode) => void;
   gameLocations: GameLocationNode[];
@@ -510,6 +515,12 @@ export interface HuntedPokemon {
 export type HuntingListMap = Record<string, HuntedPokemon[]>; // Key is area name
 
 // --- Team Prospector Types ---
+export interface ProspectorFilters {
+  orderMode: 'random' | 'numerical';
+  isNewOnly: boolean;
+  isFullyEvolvedOnly: boolean;
+}
+
 export interface TeamProspectorProps {
   onAbilityClick: (abilityName: string) => void;
   likedPokemonMap: LikedPokemonMap;
@@ -585,6 +596,7 @@ export interface StoryHelperProps {
   nextBattleLocation: string | null;
   levelCap: number | null;
   team: TeamMember[];
+  apiKeyMissing: boolean;
   gameLocations: GameLocationNode[]; // For FormattedResponse
 
   // From useBattleTracker hook

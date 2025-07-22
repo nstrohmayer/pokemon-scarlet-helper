@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect, useCallback } from 'react';
 import { LikedPokemonMap, HuntingListMap } from '../types';
 import { LIKED_POKEMON_STORAGE_KEY, HUNTING_LIST_STORAGE_KEY } from '../constants';

@@ -1,0 +1,190 @@
+{
+  "prologue-south-province-area-one": {
+    "locationId": "prologue-south-province-area-one",
+    "locationName": "South Province (Area One)",
+    "summary": "The first large open area players explore after leaving their home. It's a grassy region teeming with early-game Pokémon, connecting Cabo Poco to the grand city of Mesagoza. A great place to catch your first few team members.",
+    "catchablePokemon": [
+      { "name": "Lechonk", "pokemonId": 915, "conditions": "Standard encounter in grassy areas." },
+      { "name": "Tarountula", "pokemonId": 917, "conditions": "Standard encounter in grassy areas." },
+      { "name": "Pawmi", "pokemonId": 921, "conditions": "Standard encounter in grassy areas." },
+      { "name": "Fidough", "pokemonId": 926, "conditions": "Common encounter." },
+      { "name": "Fletchling", "pokemonId": 661, "conditions": "Common encounter, often flying low." },
+      { "name": "Hoppip", "pokemonId": 187, "conditions": "Daytime only." },
+      { "name": "Wingull", "pokemonId": 278, "conditions": "Found near the coastline and bodies of water." },
+      { "name": "Buizel", "pokemonId": 418, "conditions": "Found near the coastline and bodies of water." },
+      { "name": "Magikarp", "pokemonId": 129, "conditions": "Fishing." },
+      { "name": "Igglybuff", "pokemonId": 174, "conditions": "Nighttime only." }
+    ],
+    "trainers": [
+      {
+        "name": "Youngster Tim",
+        "strongestPokemonName": "Skwovet",
+        "strongestPokemonLevel": 5,
+        "notes": "One of the first trainers you can battle."
+      },
+      {
+        "name": "Student Giorgia",
+        "strongestPokemonName": "Pawmi",
+        "strongestPokemonLevel": 6,
+        "notes": "Uses two Pokémon: Lechonk and Pawmi."
+      }
+    ],
+    "items": [
+      { "name": "Poké Ball", "locationDescription": "Scattered on the ground throughout the area." },
+      { "name": "Potion", "locationDescription": "Multiple can be found on the ground." },
+      { "name": "Antidote", "locationDescription": "Found on a small ledge near the path to Mesagoza." },
+      { "name": "TM032 (Swift)", "locationDescription": "Found on a cliff overlooking the Pokémon Center." }
+    ],
+    "keyEvents": [
+      {
+        "name": "League Rep Reward",
+        "description": "Defeat 8 trainers in South Province (Area One) and talk to the Pokémon League representative at the area's central Pokémon Center to receive TM131 (Pollen Puff).",
+        "type": "Reward"
+      }
+    ]
+  },
+  "mesagoza-city": {
+    "locationId": "mesagoza-city",
+    "locationName": "Mesagoza City",
+    "summary": "The largest city in Paldea and home to the prestigious Naranja/Uva Academy. It serves as a central hub for the region, connecting many different areas and is where the three main story paths of the Treasure Hunt officially begin.",
+    "catchablePokemon": [],
+    "trainers": [
+      {
+        "name": "Rival Nemona (First Battle)",
+        "strongestPokemonName": "Starter Pokémon",
+        "strongestPokemonLevel": 5,
+        "notes": "Fought in the main plaza after you get your starter. She uses the starter weak to yours."
+      },
+      {
+        "name": "Rival Nemona (Before Treasure Hunt)",
+        "strongestPokemonName": "Pawmi",
+        "strongestPokemonLevel": 9,
+        "notes": "Fought on the steps of the academy. She also has her starter (Lvl 8), which is weak to yours."
+      }
+    ],
+    "items": [
+       {
+        "name": "TM082 (Thunder Wave)",
+        "locationDescription": "Found on a rooftop accessible by climbing the ladders in the terraced gardens."
+      },
+      {
+        "name": "TM070 (Sleep Talk)",
+        "locationDescription": "Found behind the stage in the main plaza."
+      }
+    ],
+    "keyEvents": [
+      {
+        "name": "Receive Your Ride Pokémon",
+        "description": "You receive your legendary partner, Koraidon or Miraidon, but it cannot be used for battling at this stage.",
+        "type": "Event"
+      },
+      {
+        "name": "Gift from Mom",
+        "description": "Received from your Mom via a phone call after visiting the academy for the first time. You get Exp. Candy S, Sandwich ingredients, and some money.",
+        "type": "Event"
+      },
+      {
+        "name": "Snom Trade",
+        "description": "Trade a Flabébé for a Snom with an NPC on a bench in the main plaza.",
+        "type": "Interaction"
+      },
+      {
+        "name": "Soothing Bell",
+        "description": "Show a friendly Pokémon to an NPC with a Marill near the western Pokémon Center to receive a Soothing Bell.",
+        "type": "Interaction"
+      },
+      {
+        "name": "Tera Shard Reward",
+        "description": "After winning your first gym badge, speak to the chef in the Treasure Eatery to receive 50 Normal Tera Shards.",
+        "type": "Reward"
+      }
+    ]
+  },
+  "south-province-area-two": {
+    "locationId": "south-province-area-two",
+    "locationName": "South Province (Area Two)",
+    "summary": "A large area connecting Mesagoza to Cortondo, characterized by its sprawling olive groves and rocky paths. It's a crucial training ground before the first Gym, introducing several new Pokémon species.",
+    "catchablePokemon": [
+      { "name": "Smoliv", "pokemonId": 928, "conditions": "Common in olive groves." },
+      { "name": "Nacli", "pokemonId": 932, "conditions": "Common near rocky terrain." },
+      { "name": "Maschiff", "pokemonId": 942, "conditions": "Standard encounter." },
+      { "name": "Rockruff", "pokemonId": 744, "conditions": "Standard encounter." },
+      { "name": "Yungoos", "pokemonId": 734, "conditions": "Daytime only." },
+      { "name": "Hoppip", "pokemonId": 187, "conditions": "Daytime only." },
+      { "name": "Bounsweet", "pokemonId": 761, "conditions": "Can be found falling from trees." },
+      { "name": "Oinkologne", "pokemonId": 916, "conditions": "Can be found in both male and female forms." }
+    ],
+    "trainers": [
+      {
+        "name": "Backpacker Luis",
+        "strongestPokemonName": "Fletchling",
+        "strongestPokemonLevel": 10,
+        "notes": "A straightforward warm-up battle."
+      },
+      {
+        "name": "Student Elena",
+        "strongestPokemonName": "Nacli",
+        "strongestPokemonLevel": 11,
+        "notes": "Uses two Pokémon: Smoliv (Lvl 11) and Nacli (Lvl 11)."
+      },
+      {
+        "name": "Picnicker Irene",
+        "strongestPokemonName": "Fidough",
+        "strongestPokemonLevel": 12,
+        "notes": "Her Fidough can be deceptively bulky."
+      }
+    ],
+    "items": [
+      { "name": "TM001 (Take Down)", "locationDescription": "Found on a high cliff near the Cortondo path." },
+      { "name": "Super Potion", "locationDescription": "Multiple can be found on the ground." },
+      { "name": "Paralyze Heal", "locationDescription": "Found near the Pokémon Center." }
+    ],
+    "keyEvents": [
+      {
+        "name": "League Rep Reward",
+        "description": "Defeat 5 trainers in South Province (Area Two) and talk to the Pokémon League representative at the Pokémon Center to receive a Covert Cloak.",
+        "type": "Reward"
+      }
+    ]
+  },
+  "west-province-area-one-south": {
+    "locationId": "west-province-area-one-south",
+    "locationName": "West Province (Area One - South)",
+    "summary": "A windy, coastal area connecting to the Open Sky Titan's lair. It's characterized by large windmills and rocky terrain, with Pokémon that enjoy the breezy conditions. A good spot to train before facing the Titan.",
+    "catchablePokemon": [
+      { "name": "Wattrel", "pokemonId": 940, "conditions": "Common, often flying near cliffs and windmills." },
+      { "name": "Rookidee", "pokemonId": 821, "conditions": "Standard encounter." },
+      { "name": "Salandit", "pokemonId": 757, "conditions": "Found near rocky outcrops, female is rare." },
+      { "name": "Cyclizar", "pokemonId": 967, "conditions": "Can be found on the roads, sometimes moving quickly." },
+      { "name": "Nacli", "pokemonId": 932, "conditions": "Common near rocky terrain." },
+      { "name": "Tadbulb", "pokemonId": 938, "conditions": "Found near the river and ponds." },
+      { "name": "Flittle", "pokemonId": 955, "conditions": "Standard encounter in grassy patches." }
+    ],
+    "trainers": [
+      {
+        "name": "Hiker Jim",
+        "strongestPokemonName": "Rockruff",
+        "strongestPokemonLevel": 18,
+        "notes": "Uses two Pokémon."
+      },
+      {
+        "name": "Student Aday",
+        "strongestPokemonName": "Wattrel",
+        "strongestPokemonLevel": 19,
+        "notes": "Her Wattrel is fast."
+      }
+    ],
+    "items": [
+      { "name": "Ether", "locationDescription": "On the ground near a large windmill." },
+      { "name": "Great Ball", "locationDescription": "Found behind a large rock on the path." },
+      { "name": "TM017 (Confuse Ray)", "locationDescription": "On a cliff overlooking the sea." }
+    ],
+    "keyEvents": [
+      {
+        "name": "League Rep Reward",
+        "description": "Defeat 6 trainers in West Province (Area One) and speak to the League Rep to receive an Amulet Coin.",
+        "type": "Reward"
+      }
+    ]
+  }
+}

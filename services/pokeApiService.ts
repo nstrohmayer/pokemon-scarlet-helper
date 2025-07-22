@@ -1,4 +1,5 @@
 
+
 import { 
   PokeApiPokemon, 
   PokeApiSpecies, 
@@ -231,6 +232,14 @@ export const fetchPokemonDetails = async (pokemonNameOrId: string | number): Pro
         }
     }
     apiCompatibleNameOrId = name.replace(/\s+/g, '-').replace(/[.'"]/g, '') + formSuffix;
+
+    const specialCases: { [key: string]: string } = {
+      'squawkabilly': 'squawkabilly-green-plumage',
+    };
+    if (specialCases[apiCompatibleNameOrId]) {
+      console.warn(`Mapping "${apiCompatibleNameOrId}" to default form "${specialCases[apiCompatibleNameOrId]}".`);
+      apiCompatibleNameOrId = specialCases[apiCompatibleNameOrId];
+    }
 
   } else {
     apiCompatibleNameOrId = pokemonNameOrId.toString();

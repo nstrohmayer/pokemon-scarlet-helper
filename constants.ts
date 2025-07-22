@@ -1,4 +1,5 @@
 
+
 import { GameLocationNode, StarterPokemonData } from './types';
 
 // A recommended progression path for Pokémon Scarlet and Violet Nuzlocke runs.
@@ -185,6 +186,7 @@ export const HUNTING_LIST_STORAGE_KEY = 'nuzlocke-sv-hunting-list';
 
 export const DEFAULT_CURRENT_LOCATION_ID = 'prologue-cabo-poco';
 export const GEN_9_START_ID = 906; // Start of Gen 9 (Paldea) Pokemon
+export const POKEMON_MAX_ID = 1025; // Last official Pokemon ID for Paldea dex
 
 
 export const SCARLET_VIOLET_STARTERS: StarterPokemonData[] = [

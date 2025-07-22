@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { PokemonDetailData, PokemonBaseStat, PokemonMoveInfo, PokemonEvolutionStep, PokemonDetailBarProps } from '../types';
 

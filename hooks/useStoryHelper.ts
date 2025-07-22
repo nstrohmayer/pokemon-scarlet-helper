@@ -1,31 +1,25 @@
 
-import { useState, useEffect, useCallback } from 'react';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { GoogleGenAI, Chat } from "@google/genai";
 import { StoryGoal, TeamMember, GameLocationNode, ChatMessage } from '../types';
-import { CUSTOM_GOALS_STORAGE_KEY, STORY_CHAT_HISTORY_STORAGE_KEY } from '../constants';
+import { fetchGoalDetailsFromGemini } from '../services/geminiService';
+import { GEMINI_MODEL_NAME, CUSTOM_GOALS_STORAGE_KEY, STORY_CHAT_HISTORY_STORAGE_KEY } from '../constants';
 
-// This function now uses a secure proxy and requires an updated signature
-async function sendChatMessageToProxy(
-  message: string,
-  history: ChatMessage[],
-  context: object
-): Promise<string> {
-    const response = await fetch('/api/gemini-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            action: 'sendChatMessage',
-            payload: { message, history, context }
-        }),
-    });
-    const responseData = await response.json();
-    if (!response.ok) {
-        throw new Error(responseData.error || `Server responded with ${response.status}`);
+let ai: GoogleGenAI | null = null;
+const getGoogleGenAI = (): GoogleGenAI => {
+  if (!ai) {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("Gemini API Key is not configured.");
     }
-    return responseData;
-}
-
+    ai = new GoogleGenAI({ apiKey });
+  }
+  return ai;
+};
 
 export const useStoryHelper = (
+  apiKeyMissing: boolean,
   team: TeamMember[],
   currentLocation: GameLocationNode | null,
   nextBattle: { name: string | null; location: string | null; level: number | null }
@@ -41,7 +35,6 @@ export const useStoryHelper = (
     }
   });
   
-  // AI-related state for goals is now removed.
   const [isAiGoalLoading, setIsAiGoalLoading] = useState<boolean>(false);
   const [aiGoalError, setAiGoalError] = useState<string | null>(null);
 
@@ -58,6 +51,8 @@ export const useStoryHelper = (
 
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
   const [chatError, setChatError] = useState<string | null>(null);
+
+  const chatRef = useRef<Chat | null>(null);
 
   // --- Effects for Persistence ---
   useEffect(() => {
@@ -85,12 +80,24 @@ export const useStoryHelper = (
     }
   }, []);
 
-  const addCustomGoalWithAi = useCallback((text: string) => {
-      // AI goal enrichment is deprecated in favor of secure proxy architecture.
-      // This function now behaves like a simple add.
-      console.warn("AI Goal Enrichment is deprecated. Adding goal manually.");
-      addCustomGoal(text);
-  }, [addCustomGoal]);
+  const addCustomGoalWithAi = useCallback(async (text: string) => {
+    if (!text.trim() || apiKeyMissing) return;
+    setIsAiGoalLoading(true);
+    setAiGoalError(null);
+    try {
+      const aiDetails = await fetchGoalDetailsFromGemini(text, team, currentLocation, nextBattle);
+      const newGoal: StoryGoal = {
+        id: Date.now().toString(), text: aiDetails.refinedGoalText || text, isCompleted: false,
+        aiLevel: aiDetails.level, aiPokemonCount: aiDetails.pokemonCount, aiNotes: aiDetails.notes
+      };
+      setCustomGoals(prev => [...prev, newGoal]);
+    } catch (err) {
+        console.error("Error fetching AI goal details:", err);
+        setAiGoalError(err instanceof Error ? err.message : "An unknown error occurred while thinking.");
+    } finally {
+        setIsAiGoalLoading(false);
+    }
+  }, [apiKeyMissing, team, currentLocation, nextBattle]);
 
   const toggleCustomGoal = useCallback((id: string) => {
     setCustomGoals(prev => prev.map(goal => goal.id === id ? { ...goal, isCompleted: !goal.isCompleted } : goal));
@@ -102,42 +109,84 @@ export const useStoryHelper = (
 
   // --- Chat Logic ---
   const sendChatMessage = useCallback(async (message: string) => {
-    if (!message.trim()) return;
+    if (apiKeyMissing || !message.trim()) return;
 
     setIsChatLoading(true);
     setChatError(null);
     
     const userMessage: ChatMessage = { role: 'user', text: message };
-    const currentHistory = [...chatHistory, userMessage];
-    setChatHistory(currentHistory);
+    setChatHistory(prev => [...prev, userMessage]);
+    
+    // Initialize chat on first message
+    if (!chatRef.current) {
+        try {
+            const genAI = getGoogleGenAI();
+            const systemInstruction = `
+                You are an AI assistant for a Pokemon Nuzlocke challenge application, specifically for the game "Pokémon Scarlet and Violet". You are the "Story Helper". Your goal is to give the player helpful, actionable advice based on their current situation.
+                
+                Guidelines:
+                1.  **Nuzlocke Focus:** All advice must be relevant to a Nuzlocke run (first encounters, avoiding deaths, preparation).
+                2.  **Concise & Actionable:** Provide specific actions.
+                3.  **Use Context:** Base your advice on the user's current game state, which will be provided with each message.
+                4.  **Formatting:** Use a simple markdown list (e.g., starting lines with '* '). When you mention a Pokémon name, wrap it in {{PokemonName}}. When you mention a game location, wrap it in [[LocationName]].
+                5.  **Output:** Respond ONLY with plain text advice. Do not add introductions like "Here's what you should do:". Do not wrap your response in JSON or markdown code fences.
+            `;
+             chatRef.current = genAI.chats.create({
+                model: GEMINI_MODEL_NAME,
+                config: { systemInstruction },
+                history: chatHistory.map(m => ({
+                    role: m.role,
+                    parts: [{ text: m.text }]
+                }))
+            });
+        } catch (err) {
+            console.error("Error initializing Gemini Chat:", err);
+            setChatError(err instanceof Error ? err.message : "Failed to initialize chat.");
+            setIsChatLoading(false);
+            return;
+        }
+    }
 
     try {
-      const context = {
-        currentLocation,
-        nextBattle,
-        team,
-        customGoals: customGoals.filter(g => !g.isCompleted)
-      };
+        let contextPrompt = "My current game status:\n";
+        contextPrompt += `*   Current Location: ${currentLocation?.name || 'Not specified'}\n`;
+        if (nextBattle.name && nextBattle.location && nextBattle.level) {
+            contextPrompt += `*   Next Major Battle: ${nextBattle.name} in [[${nextBattle.location}]] (Level Cap: ${nextBattle.level})\n`;
+        }
+        if (team.length > 0) {
+            const teamSummary = team.map(m => `{{${m.species}}} (Lvl ${m.level})`).join(', ');
+            contextPrompt += `*   Current Team: ${teamSummary}\n`;
+        }
+        if (customGoals.length > 0) {
+            const goalSummary = customGoals.filter(g => !g.isCompleted).map(g => g.text).join('; ');
+            if (goalSummary) {
+                contextPrompt += `*   My Custom Goals: ${goalSummary}\n`;
+            }
+        }
+        contextPrompt += `\nMy question is: ${message}`;
+        
+        const response = await chatRef.current.sendMessage({ message: contextPrompt });
+        const modelResponseText = response.text;
+        
+        if (typeof modelResponseText !== 'string' || modelResponseText.trim() === "") {
+            throw new Error("The AI returned an empty response.");
+        }
 
-      const modelResponseText = await sendChatMessageToProxy(message, chatHistory, context);
-      
-      if (typeof modelResponseText !== 'string' || modelResponseText.trim() === "") {
-        throw new Error("The AI returned an empty response.");
-      }
-
-      const modelMessage: ChatMessage = { role: 'model', text: modelResponseText };
-      setChatHistory(prev => [...prev, modelMessage]);
+        const modelMessage: ChatMessage = { role: 'model', text: modelResponseText };
+        setChatHistory(prev => [...prev, modelMessage]);
 
     } catch (err) {
-      console.error("Error sending chat message:", err);
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred while getting advice.";
-      setChatError(errorMessage);
-      // Remove the user's last message on error
-      setChatHistory(prev => prev.slice(0, -1));
+        console.error("Error sending chat message:", err);
+        const errorMessage = err instanceof Error ? err.message : "An unknown error occurred while getting advice.";
+        setChatError(errorMessage);
+        // Optionally remove the user's last message on error
+        setChatHistory(prev => prev.slice(0, -1));
     } finally {
-      setIsChatLoading(false);
+        setIsChatLoading(false);
     }
-  }, [team, currentLocation, nextBattle, customGoals, chatHistory]);
+
+  }, [apiKeyMissing, team, currentLocation, nextBattle, customGoals, chatHistory]);
+
 
   return {
     customGoals, addCustomGoal, toggleCustomGoal, deleteCustomGoal,

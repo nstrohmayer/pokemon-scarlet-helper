@@ -1,5 +1,5 @@
-import React from 'react';
-import { DetailedLocationInfo, CatchablePokemonInfo, LocationDetailsDisplayProps, StaticEncounterInfo } from '../types';
+import React, { useEffect } from 'react';
+import { DetailedLocationInfo, CatchablePokemonInfo, LocationDetailsDisplayProps } from '../types';
 import { PokemonName } from './PokemonName'; 
 
 const DetailCard: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode; isEmpty?: boolean; emptyText?: string }> = ({ title, icon, children, isEmpty = false, emptyText = "None notable." }) => (
@@ -47,19 +47,28 @@ const ConditionBadge: React.FC<{ conditions?: string }> = ({ conditions }) => {
   );
 };
 
+const IconEvent = () => <span className="text-yellow-400">✨</span>;
 
 export const LocationDetailsDisplay: React.FC<LocationDetailsDisplayProps> = ({ 
     details, 
     IconPokeball, 
     IconTrainer, 
     IconItem, 
-    IconBattle, 
     onPokemonNameClick,
     currentLocationId,
     onSetCurrentLocation,
     selectedLocationNodeId,
     onTriggerStarterSelection
 }) => {
+  useEffect(() => {
+    const styleId = 'pixelated-sprite-style';
+    if (document.getElementById(styleId)) return;
+    const styleElement = document.createElement('style');
+    styleElement.id = styleId;
+    styleElement.innerHTML = `.pixelated-sprite { image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; }`;
+    document.head.appendChild(styleElement);
+  }, []);
+
   const isStarterLocation = selectedLocationNodeId === 'prologue-cabo-poco';
 
   return (
@@ -92,8 +101,23 @@ export const LocationDetailsDisplay: React.FC<LocationDetailsDisplayProps> = ({
           <DetailCard title="Catchable Pokémon" icon={<IconPokeball />} isEmpty={!details.catchablePokemon.length} emptyText="No new Pokémon reported here.">
             <ul className="space-y-2">
               {details.catchablePokemon.map((pokemon: CatchablePokemonInfo, index) => (
-                <li key={index} className="flex items-center bg-slate-700/50 p-3 rounded-md hover:bg-slate-600/50 transition-colors">
-                  <IconPokeball />
+                <li key={`${pokemon.pokemonId}-${index}`} className="flex items-center bg-slate-700/50 p-3 rounded-md hover:bg-slate-600/50 transition-colors">
+                  {pokemon.pokemonId ? (
+                    <img
+                      src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.pokemonId}.png`}
+                      alt=""
+                      className="w-8 h-8 mr-3 pixelated-sprite"
+                      loading="lazy"
+                      aria-hidden="true"
+                      onError={(e) => {
+                        const target = e.currentTarget as HTMLImageElement;
+                        target.onerror = null;
+                        target.src = '/favicon.png'; // Fallback to pokeball icon
+                      }}
+                    />
+                  ) : (
+                    <div className="w-8 h-8 mr-3 flex-shrink-0"><IconPokeball /></div> // Fallback for missing ID
+                  )}
                   <PokemonName pokemonName={pokemon.name} onClick={onPokemonNameClick} />
                   <ConditionBadge conditions={pokemon.conditions} />
                 </li>
@@ -126,28 +150,36 @@ export const LocationDetailsDisplay: React.FC<LocationDetailsDisplayProps> = ({
             </ul>
           </DetailCard>
 
-          <DetailCard title="Static Encounters" icon={<IconBattle />} isEmpty={!details.staticEncounters.length} emptyText="No static encounters reported.">
+          <DetailCard title="Key Events & Interactions" icon={<IconEvent />} isEmpty={!details.keyEvents.length} emptyText="No special events reported.">
             <ul className="space-y-3">
-              {details.staticEncounters.map((encounter: StaticEncounterInfo, index: number) => {
-                const isStarterChoice = encounter.pokemonName.toLowerCase().includes('starter pokemon choice');
+              {details.keyEvents.map((event, index) => {
+                const isStarterChoice = event.name.toLowerCase().includes('starter');
                 if (isStarterLocation && isStarterChoice && onTriggerStarterSelection) {
-                  return (
+                   return (
                     <li key={index} className="bg-slate-700/50 p-3 rounded-md hover:bg-emerald-600/50 transition-colors">
                       <button
                         onClick={onTriggerStarterSelection}
                         className="w-full text-left font-semibold text-emerald-300 hover:text-emerald-200 focus:outline-none"
                         aria-label="Choose your starter Pokémon"
                       >
-                        {encounter.pokemonName} (Lv. {encounter.level}) &raquo;
+                        <p className="font-semibold text-emerald-200 flex items-center">
+                            <span title="Event" className="mr-2 text-purple-300">🎉</span>
+                            {event.name} &raquo;
+                        </p>
+                        <p className="text-sm text-slate-300 mt-1 font-normal">{event.description}</p>
                       </button>
-                      {encounter.notes && <p className="text-sm text-slate-300 italic mt-1">Note: {encounter.notes}</p>}
                     </li>
                   );
                 }
                 return (
-                  <li key={index} className="bg-slate-700/50 p-3 rounded-md hover:bg-slate-600/50 transition-colors">
-                    <p className="font-semibold text-slate-100">{encounter.pokemonName} (Lv. {encounter.level})</p>
-                    {encounter.notes && <p className="text-sm text-slate-300 italic mt-1">Note: {encounter.notes}</p>}
+                  <li key={index} className="bg-slate-700/50 p-3 rounded-md">
+                    <p className="font-semibold text-slate-100 flex items-center">
+                        {event.type === 'Reward' && <span title="Reward" className="mr-2 text-yellow-300">🏆</span>}
+                        {event.type === 'Event' && <span title="Event" className="mr-2 text-purple-300">🎉</span>}
+                        {event.type === 'Interaction' && <span title="Interaction" className="mr-2 text-sky-300">💬</span>}
+                        {event.name}
+                    </p>
+                    <p className="text-sm text-slate-300 mt-1">{event.description}</p>
                   </li>
                 );
               })}
