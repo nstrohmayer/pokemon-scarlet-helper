@@ -9,7 +9,6 @@ export const NavigatorDisplay: React.FC<NavigatorDisplayProps> = ({
   apiResponse,
   apiError,
   onReset,
-  apiKeyMissing,
   onPokemonNameClick,
   onLocationNameClick,
   gameLocations,
@@ -31,17 +30,6 @@ export const NavigatorDisplay: React.FC<NavigatorDisplayProps> = ({
     setCurrentPrompt(""); 
     onReset();
   };
-
-  if (apiKeyMissing) {
-    return (
-        <div className="bg-red-800/30 border border-red-700 text-red-300 p-6 rounded-lg shadow-xl text-center animate-fadeIn">
-            <h1 className="text-2xl font-bold text-red-400 mb-3">Navigator Unavailable</h1>
-            <p className="text-slate-200">The Nuzlocke Navigator feature requires a valid API Key.</p>
-            <p className="text-slate-300 mt-2 text-sm">Please ensure the <code className="bg-slate-700 px-1 rounded text-xs">API_KEY</code> environment variable is correctly set up.</p>
-        </div>
-    );
-  }
-
 
   return (
     <div className="p-2 md:p-4 space-y-6 animate-fadeIn">

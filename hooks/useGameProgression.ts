@@ -1,5 +1,6 @@
 
 
+
 import { useState, useEffect, useCallback } from 'react';
 import { GameLocationNode, DetailedLocationInfo } from '../types';
 import { SCARLET_VIOLET_PROGRESSION, CURRENT_LOCATION_ID_STORAGE_KEY, DEFAULT_CURRENT_LOCATION_ID } from '../constants';
@@ -7,7 +8,6 @@ import { fetchLocationDetailsFromGemini } from '../services/geminiService';
 import { ActiveMainPanelType } from './useNavigator'; // Import ActiveMainPanelType
 
 export const useGameProgression = (
-  apiKeyMissing: boolean,
   activeMainPanel: ActiveMainPanelType,
   setActiveMainPanel: (panel: ActiveMainPanelType) => void,
   completedBattles: Set<string>
@@ -124,14 +124,6 @@ export const useGameProgression = (
     setNextBattleLocation(battleLoc);
     setNextBattlePokemonCount(battlePokemonCount);
 
-    // Handle fetching details for the selected location
-    if (apiKeyMissing) {
-      setLocationDetails(null);
-      setIsLoadingLocation(false);
-      // Do not set locationError here, App.tsx handles global API key error
-      return;
-    }
-
     if (selectedLocation && activeMainPanel === 'location') {
       const fetchAllDetails = async () => {
         setIsLoadingLocation(true);
@@ -175,7 +167,7 @@ export const useGameProgression = (
         setLocationError(null); 
         setIsLoadingLocation(false); // Ensure loading is false if no location is selected
     }
-  }, [selectedLocation, apiKeyMissing, activeMainPanel, completedBattles]); // Re-run when selectedLocation or panel changes
+  }, [selectedLocation, activeMainPanel, completedBattles]); // Re-run when selectedLocation or panel changes
 
   return {
     selectedLocation,

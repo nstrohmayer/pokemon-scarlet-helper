@@ -2,23 +2,26 @@
 
 
 
-import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
+
+
+
+
+import { Type, GenerateContentParameters, GenerateContentResponse } from "@google/genai";
 import { 
     DetailedLocationInfo, 
     GeminiLocationResponse, 
     CatchablePokemonInfo, 
     TeamMember, 
-    StoryGoal, 
     GameLocationNode, 
     GeminiGoalResponse, 
     BattleStrategyDetails, 
     GeminiBattleStrategyResponse,
     PokemonGenerationInsights,
-    GeminiPokemonInsightsResponse
+    GeminiPokemonInsightsResponse,
+    ChatMessage
 } from '../types';
 import { GEMINI_MODEL_NAME, SCARLET_VIOLET_PROGRESSION } from '../constants';
 
-let ai: GoogleGenAI | null = null;
 const CACHE_PREFIX_GEMINI = "gemini_cache_sv_";
 const CACHE_PREFIX_NAVIGATOR = "gemini_navigator_cache_sv_";
 const CACHE_PREFIX_BATTLE = "gemini_battle_cache_sv_";
@@ -53,16 +56,29 @@ const loadPreloadedData = (): Promise<void> => {
 loadPreloadedData();
 // --- End of preloaded data loading ---
 
-const getGoogleGenAI = (): GoogleGenAI => {
-  if (!ai) {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) { // This will be true if API_KEY is an empty string (or null/undefined)
-      throw new Error("Gemini API Key (process.env.API_KEY) is not configured. This is typically set via the VITE_GEMINI_API_KEY environment variable during the build process. Please ensure it's correctly set in your .env file or deployment environment variables.");
+// This is a representation of the serializable response from our proxy.
+interface GeminiProxyResponse {
+    text: string;
+    candidates: GenerateContentResponse['candidates'];
+    promptFeedback: GenerateContentResponse['promptFeedback'];
+}
+
+export async function callGeminiProxy(params: GenerateContentParameters): Promise<GeminiProxyResponse> {
+    const proxyResponse = await fetch('/.netlify/functions/gemini-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ params })
+    });
+
+    const responseData = await proxyResponse.json();
+
+    if (!proxyResponse.ok) {
+        throw new Error(responseData.error || `Proxy request failed with status ${proxyResponse.status}`);
     }
-    ai = new GoogleGenAI({ apiKey: apiKey });
-  }
-  return ai;
-};
+
+    return responseData;
+}
+
 
 export const fetchLocationDetailsFromGemini = async (locationName: string): Promise<DetailedLocationInfo> => {
   // Ensure preloaded data has been attempted to load before proceeding
@@ -76,7 +92,6 @@ export const fetchLocationDetailsFromGemini = async (locationName: string): Prom
       return JSON.parse(JSON.stringify(preloadedDataMap[locationNode.id]));
   }
   
-  const genAI = getGoogleGenAI();
   const cacheKey = `${CACHE_PREFIX_GEMINI}${locationName.toLowerCase().replace(/\s+/g, '_')}`;
 
   try {
@@ -157,7 +172,7 @@ export const fetchLocationDetailsFromGemini = async (locationName: string): Prom
     };
 
   try {
-    const response: GenerateContentResponse = await genAI.models.generateContent({
+    const response = await callGeminiProxy({
         model: GEMINI_MODEL_NAME,
         contents: prompt,
         config: {
@@ -179,15 +194,7 @@ export const fetchLocationDetailsFromGemini = async (locationName: string): Prom
             const candidate = response.candidates[0];
             if (candidate.finishReason && candidate.finishReason !== 'STOP') {
                 detailedErrorMsg = `AI generation for "${locationName}" (Pokémon Scarlet & Violet) stopped prematurely. Reason: ${candidate.finishReason}.`;
-                if (candidate.finishReason === 'MAX_TOKENS' || candidate.finishReason === 'SAFETY' || candidate.finishReason === 'RECITATION') {
-                    console.error("Full AI response when generation stopped prematurely:", JSON.stringify(response, null, 2));
-                }
-            } else if (candidate.safetyRatings && candidate.safetyRatings.some(r => r.blocked)) {
-                detailedErrorMsg = `AI response for "${locationName}" (Pokémon Scarlet & Violet) might have been blocked by safety filters.`;
             }
-        }
-        if (!detailedErrorMsg.includes("Full AI response")) {
-             console.error("Full AI response when text was missing or invalid:", JSON.stringify(response, null, 2));
         }
         throw new Error(detailedErrorMsg);
     }
@@ -237,34 +244,12 @@ export const fetchLocationDetailsFromGemini = async (locationName: string): Prom
   } catch (error) {
     console.error(`Error processing Gemini API response for location "${locationName}" (Pokémon Scarlet & Violet):`, error);
     
-    let errorMessage = `Failed to get details from AI for ${locationName} (Pokémon Scarlet & Violet).`;
-    if (error instanceof SyntaxError) {
-        errorMessage = `The AI returned malformed data for ${locationName} (Pokémon Scarlet & Violet) that could not be parsed as JSON. (Details: ${error.message})`;
-    } else if (error instanceof Error) {
-        let apiError;
-        try {
-          apiError = JSON.parse(error.message);
-        } catch (e) {
-          // Not a JSON error message, proceed.
-        }
-
-        if (apiError && apiError.error && apiError.error.message) {
-          errorMessage = `API Error for ${locationName}: ${apiError.error.message} (Status: ${apiError.error.status || 'Unknown'})`;
-          if (apiError.error.code === 404) {
-            errorMessage += `. This might be due to an incorrect model name or API configuration.`
-          }
-        } else {
-          errorMessage = error.message.startsWith("AI response") || error.message.startsWith("AI request") || error.message.startsWith("AI generation") || error.message.startsWith("Gemini API Key")
-              ? error.message
-              : `Error fetching details for ${locationName} (Pokémon Scarlet & Violet) from AI: ${error.message}`;
-        }
-    }
+    const errorMessage = error instanceof Error ? error.message : `An unknown error occurred.`;
     throw new Error(errorMessage);
   }
 };
 
 export const fetchNavigatorGuidanceFromGemini = async (userPrompt: string): Promise<string> => {
-  const genAI = getGoogleGenAI();
   const cacheKey = `${CACHE_PREFIX_NAVIGATOR}${userPrompt.toLowerCase().replace(/\s+/g, '_').substring(0, 100)}`;
 
   try {
@@ -301,7 +286,7 @@ export const fetchNavigatorGuidanceFromGemini = async (userPrompt: string): Prom
   `;
 
   try {
-    const response: GenerateContentResponse = await genAI.models.generateContent({
+    const response = await callGeminiProxy({
         model: GEMINI_MODEL_NAME,
         contents: userPrompt, // User's question is the main content
         config: {
@@ -322,11 +307,8 @@ export const fetchNavigatorGuidanceFromGemini = async (userPrompt: string): Prom
             const candidate = response.candidates[0];
             if (candidate.finishReason && candidate.finishReason !== 'STOP') {
                 detailedErrorMsg = `AI generation for your Pokémon Scarlet & Violet query stopped prematurely. Reason: ${candidate.finishReason}.`;
-            } else if (candidate.safetyRatings && candidate.safetyRatings.some(r => r.blocked)) {
-                detailedErrorMsg = `AI response for your Pokémon Scarlet & Violet query might have been blocked by safety filters.`;
             }
         }
-        console.error("Full AI response when text was missing for navigator (Pokémon Scarlet & Violet):", JSON.stringify(response, null, 2));
         throw new Error(detailedErrorMsg);
     }
 
@@ -341,25 +323,7 @@ export const fetchNavigatorGuidanceFromGemini = async (userPrompt: string): Prom
 
   } catch (error) {
     console.error(`Error processing Gemini API response for navigator prompt "${userPrompt.substring(0,50)}..." (Pokémon Scarlet & Violet):`, error);
-    
-    let errorMessage = `Failed to get guidance from AI for Pokémon Scarlet & Violet.`;
-    if (error instanceof Error) {
-        let apiError;
-        try {
-          apiError = JSON.parse(error.message);
-        } catch(e) { /* not a json error message */ }
-
-        if (apiError && apiError.error && apiError.error.message) {
-            errorMessage = `API Error during navigation: ${apiError.error.message} (Status: ${apiError.error.status || 'Unknown'})`;
-            if (apiError.error.code === 404) {
-              errorMessage += `. This might be due to an incorrect model name or API configuration.`
-            }
-        } else {
-             errorMessage = error.message.startsWith("AI response") || error.message.startsWith("Your query regarding Pokémon Scarlet & Violet was blocked") || error.message.startsWith("AI generation") || error.message.startsWith("Gemini API Key")
-                ? error.message
-                : `Error fetching guidance from AI for Pokémon Scarlet & Violet: ${error.message}`;
-        }
-    }
+    const errorMessage = error instanceof Error ? error.message : `An unknown error occurred.`;
     throw new Error(errorMessage);
   }
 };
@@ -371,8 +335,6 @@ export const fetchGoalDetailsFromGemini = async (
   currentLocation: GameLocationNode | null,
   nextBattle: { name:string | null; location: string | null; level: number | null }
 ): Promise<GeminiGoalResponse> => {
-    const genAI = getGoogleGenAI();
-
     let gameContext = `Current Location: ${currentLocation?.name || 'Not specified'}.`;
     if (nextBattle.name && nextBattle.location && nextBattle.level) {
         gameContext += ` Next Major Battle: ${nextBattle.name} in ${nextBattle.location} (Lvl Cap: ${nextBattle.level}).`;
@@ -419,7 +381,7 @@ export const fetchGoalDetailsFromGemini = async (
     };
 
     try {
-        const response: GenerateContentResponse = await genAI.models.generateContent({
+        const response = await callGeminiProxy({
             model: GEMINI_MODEL_NAME,
             contents: `My goal is: "${goalText}"`,
             config: {
@@ -437,7 +399,6 @@ export const fetchGoalDetailsFromGemini = async (
              if (response.promptFeedback?.blockReason) {
                 detailedErrorMsg = `Your request for goal details was blocked. Reason: ${response.promptFeedback.blockReason}. ${response.promptFeedback.blockReasonMessage || 'No additional message provided.'}`;
             }
-            console.error("Full AI response when goal detail text was missing:", JSON.stringify(response, null, 2));
             throw new Error(detailedErrorMsg);
         }
 
@@ -459,7 +420,6 @@ export const fetchGoalDetailsFromGemini = async (
 };
 
 export const fetchPokemonGenerationInsights = async (pokemonName: string): Promise<PokemonGenerationInsights> => {
-    const genAI = getGoogleGenAI();
     const cacheKey = `${CACHE_PREFIX_INSIGHTS}${pokemonName.toLowerCase().replace(/\s+/g, '_')}`;
 
     try {
@@ -510,7 +470,7 @@ export const fetchPokemonGenerationInsights = async (pokemonName: string): Promi
     };
 
     try {
-        const response = await genAI.models.generateContent({
+        const response = await callGeminiProxy({
             model: GEMINI_MODEL_NAME,
             contents: prompt,
             config: {
@@ -543,19 +503,13 @@ export const fetchPokemonGenerationInsights = async (pokemonName: string): Promi
 
     } catch (error) {
         console.error(`Error processing Gemini API response for Pokémon insights "${pokemonName}":`, error);
-        let errorMessage = `Failed to get insights from AI for ${pokemonName}.`;
-        if (error instanceof SyntaxError) {
-            errorMessage = `The AI returned malformed data for ${pokemonName}. (Details: ${error.message})`;
-        } else if (error instanceof Error) {
-            errorMessage = error.message;
-        }
+        const errorMessage = error instanceof Error ? error.message : `An unknown error occurred.`;
         throw new Error(errorMessage);
     }
 };
 
 
 export const fetchBattleStrategyFromGemini = async (battleNode: GameLocationNode): Promise<BattleStrategyDetails> => {
-    const genAI = getGoogleGenAI();
     const battleName = battleNode.significantBattleName;
     const locationName = battleNode.name;
     if (!battleName) throw new Error("Battle node is missing a significant battle name.");
@@ -606,7 +560,7 @@ export const fetchBattleStrategyFromGemini = async (battleNode: GameLocationNode
 
 
   try {
-        const response: GenerateContentResponse = await genAI.models.generateContent({
+        const response = await callGeminiProxy({
             model: GEMINI_MODEL_NAME,
             contents: prompt,
             config: {
@@ -651,12 +605,36 @@ export const fetchBattleStrategyFromGemini = async (battleNode: GameLocationNode
         return processedDetails;
     } catch (error) {
         console.error(`Error processing Gemini API response for battle "${battleName}":`, error);
-        let errorMessage = `Failed to get battle strategy from AI for ${battleName}.`;
-        if (error instanceof SyntaxError) {
-            errorMessage = `The AI returned malformed data for ${battleName}. (Details: ${error.message})`;
-        } else if (error instanceof Error) {
-            errorMessage = error.message;
-        }
+        const errorMessage = error instanceof Error ? error.message : `An unknown error occurred.`;
         throw new Error(errorMessage);
     }
+};
+
+export const fetchChatContinuation = async (
+  history: ChatMessage[],
+  systemInstruction: string
+): Promise<string> => {
+  const contents = history.map(m => ({
+    role: m.role,
+    parts: [{ text: m.text }]
+  }));
+
+  try {
+    const response = await callGeminiProxy({
+      model: GEMINI_MODEL_NAME,
+      contents: contents,
+      config: {
+        systemInstruction: systemInstruction,
+      }
+    });
+    
+    const textOutput = response.text;
+    if (typeof textOutput !== 'string' || textOutput.trim() === "") {
+        throw new Error("The AI returned an empty response.");
+    }
+    return textOutput;
+  } catch(error) {
+      console.error('Error fetching chat continuation from proxy:', error);
+      throw error;
+  }
 };

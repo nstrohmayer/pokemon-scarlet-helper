@@ -1,15 +1,7 @@
 
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 
-export default defineConfig(({ mode }) => {
-    // Load environment variables from the project root
-    const env = loadEnv(mode, '.', '');
-    const viteApiKey = env.VITE_GEMINI_API_KEY || ""; // Default to empty string if undefined
-
-    return {
-      define: {
-        'process.env.API_KEY': JSON.stringify(viteApiKey),
-        'process.env.GEMINI_API_KEY': JSON.stringify(viteApiKey)
-      }
-    };
+export default defineConfig({
+  // The 'define' block that exposed the API key is removed.
+  // All API calls will now be proxied through a Netlify function to keep the key secure.
 });

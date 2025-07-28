@@ -1,20 +1,9 @@
-import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
+import { GenerateContentResponse, Type } from "@google/genai";
 import { ProspectorFilters, TeamMember } from '../types';
 import { GEMINI_MODEL_NAME } from '../constants';
+import { callGeminiProxy } from './geminiService'; // Import the proxy helper
 
-// --- Gemini AI and Caching Setup ---
-let ai: GoogleGenAI | null = null;
-const getGoogleGenAI = (): GoogleGenAI => {
-  if (!ai) {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("Gemini API Key (process.env.API_KEY) is not configured.");
-    }
-    ai = new GoogleGenAI({ apiKey });
-  }
-  return ai;
-};
-
+// --- Caching Setup ---
 const CACHE_PREFIX_PROSPECTOR_LIST = "prospector_list_cache_sv_";
 const CACHE_PREFIX_SUGGESTIONS = "prospector_suggestions_cache_sv_";
 const CACHE_EXPIRATION_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -26,7 +15,6 @@ const CACHE_EXPIRATION_MS = 6 * 60 * 60 * 1000; // 6 hours
  * @throws An error if the API call fails or returns an empty/invalid response.
  */
 export const fetchProspectsFromAI = async (filters: ProspectorFilters): Promise<{ name: string; id: number }[]> => {
-    const genAI = getGoogleGenAI();
     const cacheKey = `${CACHE_PREFIX_PROSPECTOR_LIST}gen_${filters.generation || 'any'}_type_${filters.type || 'any'}_evolved_${filters.isFullyEvolvedOnly}_v2`; // Versioned cache key
 
     // Check cache first
@@ -75,7 +63,7 @@ export const fetchProspectsFromAI = async (filters: ProspectorFilters): Promise<
     const systemInstruction = "You are a Pokémon expert assistant for a Nuzlocke application. Your task is to provide a list of Pokémon based on specific criteria from the user. You must only return a JSON array of objects, where each object contains the Pokémon's 'name' and 'id'. The list should be in National Pokédex order.";
 
     try {
-        const response: GenerateContentResponse = await genAI.models.generateContent({
+        const response = await callGeminiProxy({
             model: GEMINI_MODEL_NAME,
             contents: prompt,
             config: {
@@ -122,7 +110,6 @@ export const fetchTeamSuggestionsFromAI = async (team: TeamMember[]): Promise<{ 
         throw new Error("Cannot suggest teammates for an empty team. Please add Pokémon to your team first.");
     }
 
-    const genAI = getGoogleGenAI();
     // Create a stable cache key from the team's species, sorted alphabetically
     const teamCompositionKey = team.map(m => m.species).sort().join(',');
     const cacheKey = `${CACHE_PREFIX_SUGGESTIONS}${teamCompositionKey}_v1`;
@@ -177,7 +164,7 @@ export const fetchTeamSuggestionsFromAI = async (team: TeamMember[]): Promise<{ 
     const systemInstruction = "You are a Pokémon expert assistant for a Nuzlocke application. Your task is to provide a list of Pokémon suggestions to complement a user's existing team for Pokémon Scarlet and Violet. You must only return a JSON array of objects, where each object contains the Pokémon's 'name' and 'id'. The list should be in National Pokédex order.";
 
     try {
-        const response: GenerateContentResponse = await genAI.models.generateContent({
+        const response = await callGeminiProxy({
             model: GEMINI_MODEL_NAME,
             contents: prompt,
             config: {

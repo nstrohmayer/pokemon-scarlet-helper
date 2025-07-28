@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameLocationNode, AddTeamMemberData, PokemonMoveInfo, StarterPokemonData } from './types';
 import { SCARLET_VIOLET_PROGRESSION, SCARLET_VIOLET_STARTERS } from './constants';
@@ -32,14 +33,6 @@ const IconItem = () => <span className="text-yellow-400">🛍️</span>;
 const IconBattle = () => <span className="text-purple-400">⚔️</span>;
 
 const App: React.FC = () => {
-  const [apiKeyMissing, setApiKeyMissing] = useState<boolean>(() => {
-    const keyMissing = !process.env.API_KEY; 
-    if (keyMissing) {
-        console.warn("API_KEY (derived from VITE_GEMINI_API_KEY) is missing or empty. Application functionality requiring Gemini API will be limited or unavailable.");
-    }
-    return keyMissing;
-  });
-
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState<boolean>(true); 
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
   
@@ -108,7 +101,7 @@ const App: React.FC = () => {
     switchToNavigatorPanel,
     handleNavigatorSubmit,
     handleNavigatorReset,
-  } = useNavigator(apiKeyMissing);
+  } = useNavigator();
   
   // Ref to keep track of activeMainPanel for media query logic
   const activeMainPanelRef = React.useRef(activeMainPanel);
@@ -117,7 +110,7 @@ const App: React.FC = () => {
   }, [activeMainPanel]);
 
 
-  const gameProgressionHook = useGameProgression(apiKeyMissing, activeMainPanel, setActiveMainPanel, completedBattles);
+  const gameProgressionHook = useGameProgression(activeMainPanel, setActiveMainPanel, completedBattles);
 
   const {
     selectedLocation,
@@ -134,7 +127,6 @@ const App: React.FC = () => {
   } = gameProgressionHook;
 
   const storyHelperHook = useStoryHelper(
-    apiKeyMissing,
     team,
     selectedLocation,
     { name: nextBattleName, location: nextBattleLocation, level: levelCap }
@@ -156,7 +148,7 @@ const App: React.FC = () => {
     handleBackToPokemonDetail,
     handleCloseBottomBar,
     handleStageMove,
-  } = useDetailBar(apiKeyMissing);
+  } = useDetailBar();
 
   const handleLocationSelectionAndCollapse = useCallback((location: GameLocationNode) => {
     gameProgressionHook.handleSelectLocation(location);
@@ -291,27 +283,6 @@ const App: React.FC = () => {
     }
   }, [nextLocationNode, selectedLocation, gameProgressionHook, currentLocationId]);
 
-
-  if (apiKeyMissing) {
-     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
-        <div className="bg-slate-800 p-8 rounded-lg shadow-xl text-center max-w-lg w-full">
-          <h1 className="text-3xl font-bold text-red-500 mb-4">Configuration Error</h1>
-          <p className="text-slate-300 text-lg mb-3">
-            Gemini API Key is missing. Please set the <code className="bg-slate-700 px-1 rounded text-base">VITE_GEMINI_API_KEY</code> environment variable.
-          </p>
-          <p className="text-slate-300 mt-4 text-left">
-            This application requires a Gemini API key to function. To resolve this:
-          </p>
-          <ul className="list-disc list-inside text-left text-slate-300 text-sm mt-2 space-y-1.5 pl-4 bg-slate-700/30 p-4 rounded-md">
-            <li>Create a file named <code className="bg-slate-900/50 px-1 rounded text-xs">.env</code> in the root of the project.</li>
-            <li>Add your API key to the file like this: <code className="bg-slate-900/50 px-1 rounded text-xs">VITE_GEMINI_API_KEY=YOUR_API_KEY_HERE</code>.</li>
-            <li>Restart the development server.</li>
-          </ul>
-        </div>
-      </div>
-    );
-  }
 
   const renderMainPanel = () => {
     switch (activeMainPanel) {
@@ -454,7 +425,6 @@ const App: React.FC = () => {
                           nextBattleLocation={nextBattleLocation}
                           levelCap={levelCap}
                           team={team}
-                          apiKeyMissing={apiKeyMissing}
                           gameLocations={SCARLET_VIOLET_PROGRESSION}
                           completedBattles={completedBattles}
                           toggleBattleCompletion={toggleBattleCompletion}
@@ -484,7 +454,6 @@ const App: React.FC = () => {
                             apiResponse={navigatorGeminiResponse}
                             apiError={navigatorError}
                             onReset={handleNavigatorReset}
-                            apiKeyMissing={apiKeyMissing}
                             onPokemonNameClick={handleOpenPokemonDetail}
                             onLocationNameClick={handleLocationSelectionAndCollapse}
                             gameLocations={SCARLET_VIOLET_PROGRESSION}
