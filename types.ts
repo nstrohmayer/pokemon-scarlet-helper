@@ -1,8 +1,5 @@
 
 
-
-
-
 export interface GameLocationNode {
   id: string;
   name: string;
@@ -65,6 +62,7 @@ export interface AddTeamMemberData {
   nickname?: string;
   pokemonId?: number; // For fetching sprite
   initialMove?: string; // For setting the first move
+  types: string[];
 }
 
 export interface TeamMember {
@@ -76,6 +74,7 @@ export interface TeamMember {
   heldItem?: string;
   moves?: string[]; // Array of 4 move names
   isShiny?: boolean;
+  types: string[];
 }
 
 export interface TeamManagerProps {
@@ -147,8 +146,6 @@ export interface PokeApiMoveData { // This is used for the initial list of moves
   damage_class: PokeApiNamedAPIResource;
   effect_entries: PokeApiVerboseEffect[];
   effect_chance?: number | null; 
-  // Other fields for full move detail might be needed if we expand this type for the dedicated view
-  // For now, PokemonMoveInfo will be a subset/processed version
 }
 
 
@@ -323,72 +320,38 @@ export interface AbilityFlavorText {
   version_group: PokeApiNamedAPIResource;
 }
 
-export interface AbilityPokemonEntry { // Renamed for clarity
-  is_hidden: boolean;
-  slot: number;
-  pokemon: PokeApiNamedAPIResource;
-}
-
 export interface PokeApiAbility {
   id: number;
   name: string;
-  is_main_series: boolean;
-  generation: PokeApiNamedAPIResource;
-  names: Array<{ name: string; language: PokeApiNamedAPIResource }>;
+  names: { name: string; language: PokeApiNamedAPIResource }[];
   effect_entries: PokeApiVerboseEffect[];
-  effect_changes: AbilityEffectChange[];
   flavor_text_entries: AbilityFlavorText[];
-  pokemon: AbilityPokemonEntry[]; 
+  pokemon: {
+    is_hidden: boolean;
+    slot: number;
+    pokemon: PokeApiNamedAPIResource;
+  }[];
 }
 
 export interface AbilityDetailData {
   id: number;
   name: string;
-  effect: string; // Primary effect in English
-  shortEffect: string; // Short effect in English
-  flavorText: string; // Flavor text for USUM if available
-  pokemonWithAbility: Array<{ name: string; isHidden: boolean; id: string | number }>; // Processed list for USUM, added id
+  effect: string;
+  shortEffect: string;
+  flavorText: string;
+  pokemonWithAbility: { name: string; isHidden: boolean; id: string }[];
 }
 
-// --- Full Move Detail Types ---
-export interface PokeApiMoveFlavorText {
-  flavor_text: string;
-  language: PokeApiNamedAPIResource;
-  version_group: PokeApiNamedAPIResource;
-}
 
-export interface PokeApiMoveMetaData {
-  ailment: PokeApiNamedAPIResource;
-  category: PokeApiNamedAPIResource;
-  min_hits: number | null;
-  max_hits: number | null;
-  min_turns: number | null;
-  max_turns: number | null;
-  drain: number;
-  healing: number;
-  crit_rate: number;
-  ailment_chance: number;
-  flinch_chance: number;
-  stat_chance: number;
-}
-
-export interface PokeApiPastMoveStatValues {
-  accuracy: number | null;
-  effect_chance: number | null;
-  power: number | null;
-  pp: number | null;
-  effect_entries: PokeApiVerboseEffect[];
-  type: PokeApiNamedAPIResource | null;
-  version_group: PokeApiNamedAPIResource;
-}
-
-export interface FullPokeApiMoveData extends PokeApiMoveData { // Extends the basic PokeApiMoveData
-  generation: PokeApiNamedAPIResource;
+// --- Move Detail Types ---
+export interface FullPokeApiMoveData extends PokeApiMoveData {
+  flavor_text_entries: {
+    flavor_text: string;
+    language: PokeApiNamedAPIResource;
+    version_group: PokeApiNamedAPIResource;
+  }[];
   target: PokeApiNamedAPIResource;
-  flavor_text_entries: PokeApiMoveFlavorText[];
   learned_by_pokemon: PokeApiNamedAPIResource[];
-  meta?: PokeApiMoveMetaData;
-  past_values?: PokeApiPastMoveStatValues[];
 }
 
 export interface FullMoveDetailData {
@@ -400,67 +363,69 @@ export interface FullMoveDetailData {
   type: string;
   damageClass: string;
   effect: string;
-  effectChance?: number | null;
-  flavorText: string; // USUM flavor text
+  effectChance: number | null | undefined;
+  flavorText: string;
   target: string;
-  learnedByPokemon: Array<{ name: string; id: string | number }>; // Added processed list
+  learnedByPokemon: { name: string; id: string }[];
 }
 
+// --- Component Prop Types ---
 
-// Props for PokemonDetailBar - now passed through DetailDisplayController
-export interface PokemonDetailBarProps {
-  pokemonData: PokemonDetailData; // Not nullable here, controller handles null
-  isCaught: boolean;
-  onToggleCaught: (pokemonId: string | number) => void;
-  onAddToTeam: (speciesName: string, pokemonId: number) => void;
-  onPokemonNameClickForEvolution: (pokemonNameOrId: string | number) => void; // Can take name or ID
-  onAbilityNameClick: (abilityName: string) => void; // abilityName is rawName
-  onMoveNameClick: (moveName: string, rawMoveName: string) => void; // Pass raw name for API lookup
-  onStageMove: (pokemonId: number, moveName: string, moveDetails: PokemonMoveInfo) => void;
-  stagedMoveNameForThisPokemon: string | null;
-  onClose: () => void;
-  onAddToHuntingList: (pokemonId: number, pokemonName: string, area: string) => void;
+export interface PokemonContext {
+  name: string;
+  id: number;
 }
 
-export interface AbilityDetailDisplayProps {
-  abilityData: AbilityDetailData;
-  onPokemonNameClick?: (pokemonNameOrId: string | number) => void; // Added for linking
-}
-
-export interface MoveDetailDisplayProps {
-  moveData: FullMoveDetailData;
-  onPokemonNameClick?: (pokemonNameOrId: string | number) => void; // Added for linking
-}
-
-
-// Props for DetailDisplayController
 export interface DetailDisplayControllerProps {
-  activeView: 'pokemon' | 'ability' | 'move';
+  activeView: 'pokemon' | 'ability' | 'move' | null;
   pokemonData: PokemonDetailData | null;
   abilityData: AbilityDetailData | null;
-  moveData: FullMoveDetailData | null; 
+  moveData: FullMoveDetailData | null;
   isLoading: boolean;
   error: string | null;
-  
   onClose: () => void;
-  onBackToPokemon?: () => void; 
-  pokemonContextForDetailViewName?: string | null;
-
-  // Props specifically for when PokemonDetailBar is active
+  onBackToPokemon?: () => void;
+  pokemonContextForDetailViewName?: string;
   isCaught?: boolean;
-  onToggleCaught?: (pokemonId: string | number) => void;
-  onAddToTeam?: (speciesName: string, pokemonId: number) => void;
+  onToggleCaught?: (pokemonId: number) => void;
+  onAddToTeam?: (speciesName: string, pokemonId: number, types: string[]) => void;
   onAddToHuntingList?: (pokemonId: number, pokemonName: string, area: string) => void;
   onStageMove?: (pokemonId: number, moveName: string, moveDetails: PokemonMoveInfo) => void;
   stagedMoveNameForThisPokemon?: string | null;
-
-  // Callbacks for navigation triggered from child components
-  onPokemonNameClickForEvolution: (pokemonNameOrId: string | number) => void; // Can take name or ID
-  onAbilityNameClick: (abilityName: string) => void; // abilityName is rawName
-  onMoveNameClick: (moveName: string, rawMoveName: string) => void; // Pass raw name for API lookup
+  onPokemonNameClickForEvolution?: (pokemonName: string) => void;
+  onAbilityNameClick?: (abilityName: string) => void;
+  onMoveNameClick?: (moveDisplayName: string, rawMoveName: string) => void;
 }
 
-// Props for NavigatorDisplay
+export interface PokemonDetailBarProps {
+  pokemonData: PokemonDetailData;
+  isCaught: boolean;
+  onToggleCaught: (pokemonId: number) => void;
+  onAddToTeam: (speciesName: string, pokemonId: number, types: string[]) => void;
+  onAddToHuntingList: (pokemonId: number, pokemonName: string, area: string) => void;
+  onPokemonNameClickForEvolution: (name: string) => void;
+  onAbilityNameClick: (abilityName: string) => void;
+  onMoveNameClick: (moveDisplayName: string, rawMoveName: string) => void;
+  onStageMove: (pokemonId: number, moveName: string, moveDetails: PokemonMoveInfo) => void;
+  stagedMoveNameForThisPokemon: string | null;
+  onClose: () => void; 
+}
+
+export interface ProspectorFilters {
+  generation: number | null;
+  type: string | null;
+  isFullyEvolvedOnly: boolean;
+}
+
+export interface TeamProspectorProps {
+    team: TeamMember[];
+    onAbilityClick: (abilityName: string) => void;
+    likedPokemonMap: { [key: string]: boolean };
+    onToggleLiked: (pokemonId: number) => void;
+    onPokemonClick: (pokemonNameOrId: string | number) => void;
+    onAddToTeam: (memberData: AddTeamMemberData) => boolean;
+}
+
 export interface NavigatorDisplayProps {
   initialPromptValue: string;
   onPromptSubmit: (prompt: string) => void;
@@ -481,112 +446,61 @@ export interface FormattedResponseProps {
   onLocationNameClick: (location: GameLocationNode) => void;
 }
 
-// --- Starter Pokemon Selection Types ---
-export interface StarterEvolutionStage {
+export interface StarterPokemonData {
+  id: string;
   name: string;
-  pokeApiId: number; // For sprite
+  pokeApiId: number;
   types: string[];
-  method?: string; // Optional, e.g. "Level 16", "Use Fire Stone"
+  initialMoves: { name: string; type: string; power: number; description: string }[];
+  description: string;
+  evolutions: StarterEvolutionStage[];
 }
 
-export interface StarterPokemonData {
-  id: string; // e.g., "leaflet"
-  name: string; // e.g., "Leaflet"
-  pokeApiId: number; // For sprite and base details (e.g., Bulbasaur's ID)
-  types: string[];
-  initialMoves: Array<{ name: string; type: string; power?: number; description: string }>;
-  description: string; // Why it's a good choice
-  evolutions: StarterEvolutionStage[]; // Array representing the full line, including the starter itself as the first element
+export interface StarterEvolutionStage {
+    name: string;
+    pokeApiId: number;
+    types: string[];
+    method: string;
 }
 
 export interface StarterSelectionDisplayProps {
-  starters: StarterPokemonData[];
-  onSelectStarter: (starter: StarterPokemonData) => void;
+    starters: StarterPokemonData[];
+    onSelectStarter: (starter: StarterPokemonData) => void;
 }
 
-// Map for liked pokemon
-export type LikedPokemonMap = Record<string, boolean>;
-
-// Map for hunting list
-export interface HuntedPokemon {
-    pokemonId: number;
-    pokemonName: string;
-}
-export type HuntingListMap = Record<string, HuntedPokemon[]>; // Key is area name
-
-// --- Team Prospector Types ---
-export interface ProspectorFilters {
-  orderMode: 'random' | 'numerical';
-  isNewOnly: boolean;
-  isFullyEvolvedOnly: boolean;
-}
-
-export interface TeamProspectorProps {
-  onAbilityClick: (abilityName: string) => void;
-  likedPokemonMap: LikedPokemonMap;
-  onToggleLiked: (pokemonId: number) => void;
-  onPokemonClick: (pokemonId: number) => void;
-}
-
-export interface LikedPokemonDisplayProps {
-  likedPokemonIds: number[];
-  onPokemonClick: (pokemonId: number) => void;
-}
-
-export interface HuntingListDisplayProps {
-  huntingList: HuntingListMap;
-  onPokemonClick: (pokemonId: number) => void;
-  onRemoveFromHunt: (pokemonId: number, area: string) => void;
-}
-
-// --- Story Helper Types ---
 export interface StoryGoal {
-  id: string;
-  text: string;
-  isCompleted: boolean;
-  // AI-enriched fields
-  aiLevel?: number;
-  aiPokemonCount?: number;
-  aiNotes?: string;
+    id: string;
+    text: string;
+    isCompleted: boolean;
+    aiNotes?: string;
+    aiLevel?: number;
+    aiPokemonCount?: number;
 }
 
-// For the AI response for a custom goal
 export interface GeminiGoalResponse {
-  refinedGoalText: string;
-  level: number;
-  pokemonCount: number;
-  notes: string;
-}
-
-export interface ChatMessage {
-  role: 'user' | 'model';
-  text: string;
-}
-
-export interface BattleStrategyPokemon {
-  name: string;
-  typeInfo: string; // e.g., "Bug/Flying", "Tera Type: Bug"
-  notes: string;
+    refinedGoalText: string;
+    level: number;
+    pokemonCount: number;
+    notes: string;
 }
 
 export interface BattleStrategyDetails {
-  battleId: string; // e.g., "gym-cortondo"
-  puzzleInformation?: string;
-  keyOpponentPokemon: BattleStrategyPokemon[];
-  recommendedPokemonTypes: string[];
-  nuzlockeTips: string; // A single string, can contain markdown
-}
-
-// For Gemini's response
-export interface GeminiBattleStrategyResponse {
+    battleId: string;
     puzzleInformation: string;
-    keyOpponentPokemon: Array<{
+    keyOpponentPokemon: {
         name: string;
         typeInfo: string;
         notes: string;
-    }>;
+    }[];
     recommendedPokemonTypes: string[];
     nuzlockeTips: string;
+}
+
+export interface GeminiBattleStrategyResponse extends Omit<BattleStrategyDetails, 'battleId'> {}
+
+export interface ChatMessage {
+    role: 'user' | 'model';
+    text: string;
 }
 
 export interface StoryHelperProps {
@@ -597,30 +511,49 @@ export interface StoryHelperProps {
   levelCap: number | null;
   team: TeamMember[];
   apiKeyMissing: boolean;
-  gameLocations: GameLocationNode[]; // For FormattedResponse
-
-  // From useBattleTracker hook
+  gameLocations: GameLocationNode[];
   completedBattles: Set<string>;
   toggleBattleCompletion: (locationId: string) => void;
-
-  // From useStoryHelper hook for custom goals
   customGoals: StoryGoal[];
   addCustomGoal: (text: string) => void;
   toggleCustomGoal: (id: string) => void;
   deleteCustomGoal: (id: string) => void;
-
-  // For AI-enriched goals
   addCustomGoalWithAi: (text: string) => void;
   isAiGoalLoading: boolean;
   aiGoalError: string | null;
-
-  // For interactive chat
   chatHistory: ChatMessage[];
   sendChatMessage: (message: string) => void;
   isChatLoading: boolean;
   chatError: string | null;
-
-  // Navigation callbacks
   onPokemonNameClick: (pokemonName: string) => void;
   onLocationNameClick: (location: GameLocationNode) => void;
+}
+
+export interface LikedPokemonDisplayProps {
+    likedPokemonIds: number[];
+    onPokemonClick: (id: number) => void;
+}
+
+export interface HuntingListMap {
+    [area: string]: { pokemonId: number, pokemonName: string }[];
+}
+
+export interface HuntingListDisplayProps {
+    huntingList: HuntingListMap;
+    onPokemonClick: (id: number) => void;
+    onRemoveFromHunt: (pokemonId: number, area: string) => void;
+}
+
+export interface LikedPokemonMap {
+    [pokemonId: string]: boolean;
+}
+
+export interface MoveDetailDisplayProps {
+    moveData: FullMoveDetailData;
+    onPokemonNameClick?: (pokemonNameOrId: string | number) => void;
+}
+
+export interface AbilityDetailDisplayProps {
+    abilityData: AbilityDetailData;
+    onPokemonNameClick?: (pokemonNameOrId: string | number) => void;
 }

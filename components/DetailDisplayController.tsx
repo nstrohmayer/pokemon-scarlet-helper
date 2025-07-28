@@ -1,4 +1,6 @@
 
+
+
 import React, { useEffect } from 'react'; // Added useEffect import
 import { DetailDisplayControllerProps } from '../types';
 import { PokemonDetailBar } from './PokemonDetailBar';

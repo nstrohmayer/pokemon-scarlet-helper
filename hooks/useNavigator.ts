@@ -4,14 +4,14 @@ import { fetchNavigatorGuidanceFromGemini } from '../services/geminiService';
 export type ActiveMainPanelType = 'location' | 'navigator' | 'starterSelection' | 'teamBuilder';
 
 export const useNavigator = (apiKeyMissing: boolean) => {
-  const [activeMainPanel, setActiveMainPanel] = useState<ActiveMainPanelType>('location');
+  const [activeMainPanel, setActiveMainPanel] = useState<ActiveMainPanelType>('teamBuilder');
   const [navigatorUserPrompt, setNavigatorUserPrompt] = useState<string>("");
   const [navigatorGeminiResponse, setNavigatorGeminiResponse] = useState<string | null>(null);
   const [isLoadingNavigatorQuery, setIsLoadingNavigatorQuery] = useState<boolean>(false);
   const [navigatorError, setNavigatorError] = useState<string | null>(null);
 
   const switchToNavigatorPanel = useCallback(() => {
-    setActiveMainPanel('navigator');
+    setActiveMainPanel('teamBuilder');
   }, []);
 
   const handleNavigatorSubmit = useCallback(async (prompt: string) => {

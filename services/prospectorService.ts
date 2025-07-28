@@ -1,104 +1,220 @@
+import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
+import { ProspectorFilters, TeamMember } from '../types';
+import { GEMINI_MODEL_NAME } from '../constants';
 
-import { PokemonDetailData, ProspectorFilters } from '../types';
-import { fetchPokemonDetails } from './pokeApiService';
-import { GEN_9_START_ID, POKEMON_MAX_ID } from '../constants';
-
-const MAX_FETCH_ATTEMPTS = 50;
-
-/**
- * Checks if a given Pokémon matches the filter criteria.
- * @param pokemon The Pokémon data to check.
- * @param filters The active filters.
- * @returns True if the Pokémon is a match, false otherwise.
- */
-const checkFilters = (pokemon: PokemonDetailData, filters: ProspectorFilters): boolean => {
-    if (filters.isNewOnly && pokemon.id < GEN_9_START_ID) {
-        return false;
+// --- Gemini AI and Caching Setup ---
+let ai: GoogleGenAI | null = null;
+const getGoogleGenAI = (): GoogleGenAI => {
+  if (!ai) {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("Gemini API Key (process.env.API_KEY) is not configured.");
     }
-    if (filters.isFullyEvolvedOnly && pokemon.evolutions?.nextStages && pokemon.evolutions.nextStages.length > 0) {
-        return false;
-    }
-    return true;
+    ai = new GoogleGenAI({ apiKey });
+  }
+  return ai;
 };
 
-/**
- * Fetches a random Pokémon that matches the given filters.
- * @param filters The active filters.
- * @returns A promise that resolves to the found Pokémon data.
- * @throws An error if no matching Pokémon can be found.
- */
-const fetchRandomProspect = async (filters: ProspectorFilters): Promise<PokemonDetailData> => {
-    let attempts = 0;
-    while (attempts < MAX_FETCH_ATTEMPTS) {
-        attempts++;
-        const minId = filters.isNewOnly ? GEN_9_START_ID : 1;
-        const maxId = POKEMON_MAX_ID;
-        const randomId = Math.floor(Math.random() * (maxId - minId + 1)) + minId;
+const CACHE_PREFIX_PROSPECTOR_LIST = "prospector_list_cache_sv_";
+const CACHE_PREFIX_SUGGESTIONS = "prospector_suggestions_cache_sv_";
+const CACHE_EXPIRATION_MS = 6 * 60 * 60 * 1000; // 6 hours
 
-        try {
-            const pokemon = await fetchPokemonDetails(randomId);
-            if (checkFilters(pokemon, filters)) {
-                return pokemon;
+/**
+ * Fetches a list of Pokémon from the Gemini API based on specified filters.
+ * @param filters The active filters for generation, type, and evolution status.
+ * @returns A promise that resolves to an array of Pokémon objects with name and id.
+ * @throws An error if the API call fails or returns an empty/invalid response.
+ */
+export const fetchProspectsFromAI = async (filters: ProspectorFilters): Promise<{ name: string; id: number }[]> => {
+    const genAI = getGoogleGenAI();
+    const cacheKey = `${CACHE_PREFIX_PROSPECTOR_LIST}gen_${filters.generation || 'any'}_type_${filters.type || 'any'}_evolved_${filters.isFullyEvolvedOnly}_v2`; // Versioned cache key
+
+    // Check cache first
+    try {
+        const cachedItem = localStorage.getItem(cacheKey);
+        if (cachedItem) {
+            const cacheEntry = JSON.parse(cachedItem);
+            if (Date.now() - cacheEntry.timestamp < CACHE_EXPIRATION_MS) {
+                console.log(`Serving prospector list for filters ${JSON.stringify(filters)} from cache.`);
+                return cacheEntry.data;
             }
-        } catch (err) {
-            console.warn(`Random prospect fetch failed for ID ${randomId}:`, err);
         }
+    } catch (e) {
+        console.warn("Error reading prospector cache", e);
     }
-    throw new Error("Could not find a random Pokémon matching your criteria. Please try again or adjust filters.");
-};
+    
+    const prompt = `
+        List all Pokémon that meet these criteria for games up to and including Pokémon Scarlet and Violet.
+        - Generation: ${filters.generation ? `Gen ${filters.generation}` : 'Any'}
+        - Primary or Secondary Type: ${filters.type || 'Any'}
+        - Evolution Status: ${filters.isFullyEvolvedOnly ? 'Must be fully evolved (cannot evolve further)' : 'Any'}
 
-/**
- * Fetches the next sequential Pokémon that matches the given filters.
- * @param filters The active filters.
- * @param currentId The ID of the current Pokémon to start searching from.
- * @returns A promise that resolves to the found Pokémon data.
- * @throws An error if no matching Pokémon can be found.
- */
-const fetchNumericalProspect = async (filters: ProspectorFilters, currentId: number): Promise<PokemonDetailData> => {
-    let attempts = 0;
-    let nextId = currentId;
-    const minId = 1;
-    const maxId = POKEMON_MAX_ID;
-    const totalRange = (maxId - minId + 1);
+        Return the list as a JSON array of objects, where each object has a "name" (official Pokémon name) and an "id" (National Pokédex number). Order them by their National Pokédex number. For example: [{"name": "Bulbasaur", "id": 1}, {"name": "Ivysaur", "id": 2}].
+        If no Pokémon match, return an empty array.
+    `;
 
-    while (attempts < totalRange) {
-        attempts++;
-        nextId++;
+    const schema = {
+        type: Type.ARRAY,
+        description: "A list of Pokémon objects that match the user's criteria, sorted by National Pokédex number.",
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                name: {
+                    type: Type.STRING,
+                    description: "The official English name of the Pokémon."
+                },
+                id: {
+                    type: Type.NUMBER,
+                    description: "The official National Pokédex ID for the Pokémon."
+                }
+            },
+            required: ["name", "id"]
+        }
+    };
+    
+    const systemInstruction = "You are a Pokémon expert assistant for a Nuzlocke application. Your task is to provide a list of Pokémon based on specific criteria from the user. You must only return a JSON array of objects, where each object contains the Pokémon's 'name' and 'id'. The list should be in National Pokédex order.";
+
+    try {
+        const response: GenerateContentResponse = await genAI.models.generateContent({
+            model: GEMINI_MODEL_NAME,
+            contents: prompt,
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                temperature: 0.0
+            }
+        });
+
+        const textOutput = response.text;
         
-        if (nextId > maxId) {
-            nextId = minId;
+        if (typeof textOutput !== 'string' || textOutput.trim() === "") {
+            throw new Error("The AI returned an empty response for the prospector list.");
         }
 
-        // If 'New Only' is on and we're below the Gen 9 start, jump ahead.
-        if (filters.isNewOnly && nextId < GEN_9_START_ID) {
-            nextId = GEN_9_START_ID;
+        let jsonStr = textOutput.trim();
+        const fenceRegex = /^```(?:json)?\s*\n?(.*?)\n?\s*```$/s;
+        const match = jsonStr.match(fenceRegex);
+        if (match && match[1]) {
+            jsonStr = match[1].trim();
         }
 
-        try {
-            const pokemon = await fetchPokemonDetails(nextId);
-            if (checkFilters(pokemon, filters)) {
-                return pokemon;
-            }
-        } catch (err) {
-            // This can happen for non-existent IDs (e.g., missing forms in a sequence).
-            // We just ignore it and continue to the next ID.
-            console.warn(`Numerical prospect fetch failed for ID ${nextId}, continuing...`, err);
+        const pokemonData = JSON.parse(jsonStr) as { name: string; id: number }[];
+
+        // Cache the result
+        const cacheEntry = { timestamp: Date.now(), data: pokemonData };
+        localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
+
+        return pokemonData;
+
+    } catch (error) {
+        console.error("Error fetching prospect list from Gemini:", error);
+        let errorMessage = "Failed to fetch Pokémon list from AI.";
+        if (error instanceof Error) {
+            errorMessage = error.message;
         }
+        throw new Error(errorMessage);
     }
-    throw new Error("Could not find a sequential Pokémon matching your criteria. Please try again or adjust filters.");
 };
 
-/**
- * Main service function to fetch a Pokémon prospect based on filters.
- * @param filters The active filters.
- * @param currentPokemonId The ID of the current Pokémon, used for numerical mode.
- * @returns A promise that resolves to the found Pokémon data.
- */
-export const fetchProspect = async (filters: ProspectorFilters, currentPokemonId?: number): Promise<PokemonDetailData> => {
-    if (filters.orderMode === 'numerical') {
-        const startId = currentPokemonId ?? 0;
-        return fetchNumericalProspect(filters, startId);
-    } else {
-        return fetchRandomProspect(filters);
+export const fetchTeamSuggestionsFromAI = async (team: TeamMember[]): Promise<{ name: string; id: number }[]> => {
+    if (team.length === 0) {
+        throw new Error("Cannot suggest teammates for an empty team. Please add Pokémon to your team first.");
+    }
+
+    const genAI = getGoogleGenAI();
+    // Create a stable cache key from the team's species, sorted alphabetically
+    const teamCompositionKey = team.map(m => m.species).sort().join(',');
+    const cacheKey = `${CACHE_PREFIX_SUGGESTIONS}${teamCompositionKey}_v1`;
+
+    // Check cache
+    try {
+        const cachedItem = localStorage.getItem(cacheKey);
+        if (cachedItem) {
+            const cacheEntry = JSON.parse(cachedItem);
+            if (Date.now() - cacheEntry.timestamp < CACHE_EXPIRATION_MS) {
+                console.log(`Serving team suggestions for team [${teamCompositionKey}] from cache.`);
+                return cacheEntry.data;
+            }
+        }
+    } catch (e) {
+        console.warn("Error reading suggestions cache", e);
+    }
+    
+    const teamSummary = team.map(m => `- ${m.species} (Types: ${m.types.join('/')})`).join('\n');
+
+    const prompt = `
+        My current Pokémon team for a Nuzlocke run in Pokémon Scarlet and Violet consists of:\n
+        ${teamSummary}\n\n
+        Please suggest a list of 10-15 good Pokémon to add to this team to improve its balance.
+        Focus on suggestions that cover my team's defensive weaknesses and add good offensive type coverage against common threats in the game.
+        Prioritize Pokémon that are reasonably available to catch during a playthrough.
+        Do not suggest Pokémon already on my team.
+
+        Return the list as a JSON array of objects, where each object has a "name" (official Pokémon name) and an "id" (National Pokédex number). Order them by their National Pokédex number. For example: [{"name": "Magnemite", "id": 81}, {"name": "Gengar", "id": 94}].
+        If my team is already perfectly balanced, you can return an empty array, but it's very unlikely.
+    `;
+
+    const schema = {
+        type: Type.ARRAY,
+        description: "A list of Pokémon objects suggested to complement the user's team, sorted by National Pokédex number.",
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                name: {
+                    type: Type.STRING,
+                    description: "The official English name of the Pokémon."
+                },
+                id: {
+                    type: Type.NUMBER,
+                    description: "The official National Pokédex ID for the Pokémon."
+                }
+            },
+            required: ["name", "id"]
+        }
+    };
+    
+    const systemInstruction = "You are a Pokémon expert assistant for a Nuzlocke application. Your task is to provide a list of Pokémon suggestions to complement a user's existing team for Pokémon Scarlet and Violet. You must only return a JSON array of objects, where each object contains the Pokémon's 'name' and 'id'. The list should be in National Pokédex order.";
+
+    try {
+        const response: GenerateContentResponse = await genAI.models.generateContent({
+            model: GEMINI_MODEL_NAME,
+            contents: prompt,
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                temperature: 0.1
+            }
+        });
+
+        const textOutput = response.text;
+        
+        if (typeof textOutput !== 'string' || textOutput.trim() === "") {
+            throw new Error("The AI returned an empty response for team suggestions.");
+        }
+
+        let jsonStr = textOutput.trim();
+        const fenceRegex = /^```(?:json)?\s*\n?(.*?)\n?\s*```$/s;
+        const match = jsonStr.match(fenceRegex);
+        if (match && match[1]) {
+            jsonStr = match[1].trim();
+        }
+
+        const pokemonData = JSON.parse(jsonStr) as { name: string; id: number }[];
+
+        // Cache the result
+        const cacheEntry = { timestamp: Date.now(), data: pokemonData };
+        localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
+
+        return pokemonData;
+
+    } catch (error) {
+        console.error("Error fetching team suggestions from Gemini:", error);
+        let errorMessage = "Failed to fetch team suggestions from AI.";
+        if (error instanceof Error) {
+            errorMessage = error.message;
+        }
+        throw new Error(errorMessage);
     }
 };

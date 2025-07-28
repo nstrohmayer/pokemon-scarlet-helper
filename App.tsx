@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameLocationNode, AddTeamMemberData, PokemonMoveInfo, StarterPokemonData } from './types';
 import { SCARLET_VIOLET_PROGRESSION, SCARLET_VIOLET_STARTERS } from './constants';
@@ -43,7 +44,7 @@ const App: React.FC = () => {
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
   
   // State for Team Builder tabs
-  const [teamBuilderTopTab, setTeamBuilderTopTab] = useState<'management' | 'story'>('management');
+  const [teamBuilderActiveTab, setTeamBuilderActiveTab] = useState<'management' | 'story' | 'navigator'>('management');
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 768px)'); // Tailwind's 'md' breakpoint
@@ -163,16 +164,10 @@ const App: React.FC = () => {
       setIsLeftSidebarCollapsed(true);
     }
   }, [gameProgressionHook, isMobileView, activeMainPanel]);
-
-  const handleSwitchToNavigatorAndCollapse = useCallback(() => {
-    switchToNavigatorPanel();
-     if (isMobileView && activeMainPanel !== 'starterSelection') {
-      setIsLeftSidebarCollapsed(true);
-    }
-  }, [switchToNavigatorPanel, isMobileView, activeMainPanel]);
   
   const handleSwitchToTeamBuilderAndCollapse = useCallback(() => {
     setActiveMainPanel('teamBuilder');
+    setTeamBuilderActiveTab('management'); // Reset to management tab
     if (isMobileView && activeMainPanel !== 'starterSelection') {
       setIsLeftSidebarCollapsed(true);
     }
@@ -196,7 +191,8 @@ const App: React.FC = () => {
         species: starter.name,
         level: 5, // Standard starter level
         pokemonId: starter.pokeApiId,
-        initialMove: starter.initialMoves[0]?.name // Add first initial move
+        initialMove: starter.initialMoves[0]?.name, // Add first initial move
+        types: starter.types
     });
     handleToggleCaughtStatus(starter.pokeApiId); // Mark as caught
 
@@ -247,21 +243,19 @@ const App: React.FC = () => {
     }
   }, [selectedMoveForAssignment, team, setTeam, setSelectedMoveForAssignment]);
 
-  const handleAddPokemonToTeamFromDetailCallback = useCallback((speciesName: string, pokemonId: number) => {
-    if (team.some(member => member.pokemonId === pokemonId)) {
-        alert(`${speciesName} is already in your team!`); return;
-    }
-    if (team.length >= 6) {
-        alert("Your team is full (6 Pokémon maximum)!"); return;
-    }
+  const handleAddPokemonToTeamFromDetailCallback = useCallback((speciesName: string, pokemonId: number, types: string[]) => {
     let initialMoveName: string | undefined = undefined;
     if (selectedMoveForAssignment && selectedMoveForAssignment.pokemonId === pokemonId) {
         initialMoveName = selectedMoveForAssignment.moveName;
     }
-    addTeamMember({ species: speciesName, level: 5, pokemonId: pokemonId, initialMove: initialMoveName });
-    if (!caughtPokemon[pokemonId.toString()]) { handleToggleCaughtStatus(pokemonId); }
-    if (initialMoveName) { setSelectedMoveForAssignment(null); } 
-  }, [team, caughtPokemon, handleToggleCaughtStatus, addTeamMember, selectedMoveForAssignment, setSelectedMoveForAssignment]);
+    
+    const success = addTeamMember({ species: speciesName, level: 5, pokemonId: pokemonId, initialMove: initialMoveName, types: types });
+
+    if (success) {
+        if (!caughtPokemon[pokemonId.toString()]) { handleToggleCaughtStatus(pokemonId); }
+        if (initialMoveName) { setSelectedMoveForAssignment(null); } 
+    }
+  }, [addTeamMember, caughtPokemon, handleToggleCaughtStatus, selectedMoveForAssignment, setSelectedMoveForAssignment]);
 
 
   const stagedMoveNameForCurrentPokemon =
@@ -347,25 +341,10 @@ const App: React.FC = () => {
               onTriggerStarterSelection={handleOpenStarterSelection}
             />
           ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-lg text-slate-400">Please select a location from the list.</p>
+             <div className="flex items-center justify-center h-full">
+              <p className="text-lg text-slate-400">Select a location from the sidebar to begin your journey.</p>
             </div>
           )
-        );
-      case 'navigator':
-        return (
-          <NavigatorDisplay
-            initialPromptValue={navigatorUserPrompt}
-            onPromptSubmit={handleNavigatorSubmit}
-            isLoading={isLoadingNavigatorQuery}
-            apiResponse={navigatorGeminiResponse}
-            apiError={navigatorError}
-            onReset={handleNavigatorReset}
-            apiKeyMissing={apiKeyMissing}
-            onPokemonNameClick={handleOpenPokemonDetail}
-            onLocationNameClick={handleLocationSelectionAndCollapse}
-            gameLocations={SCARLET_VIOLET_PROGRESSION}
-          />
         );
       case 'starterSelection':
         return (
@@ -378,30 +357,38 @@ const App: React.FC = () => {
         return (
           <div className="animate-fadeIn">
               <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">
-                  Team Builder
+                  Team Builder &amp; Tools
               </h1>
                 {/* Top Level Tabs */}
                 <div className="flex space-x-1 border-b-2 border-slate-700 mt-4 mb-6">
                     <button
-                        onClick={() => setTeamBuilderTopTab('management')}
+                        onClick={() => setTeamBuilderActiveTab('management')}
                         className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${
-                            teamBuilderTopTab === 'management' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
+                            teamBuilderActiveTab === 'management' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
                         }`}
                     >
-                        Team Management
+                        Management
                     </button>
                     <button
-                        onClick={() => setTeamBuilderTopTab('story')}
+                        onClick={() => setTeamBuilderActiveTab('story')}
                         className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${
-                            teamBuilderTopTab === 'story' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
+                            teamBuilderActiveTab === 'story' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
                         }`}
                     >
                         Story Helper
                     </button>
+                    <button
+                        onClick={() => setTeamBuilderActiveTab('navigator')}
+                        className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${
+                            teamBuilderActiveTab === 'navigator' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
+                        }`}
+                    >
+                        Navigator
+                    </button>
                 </div>
 
                 {/* Content for Top Level Tabs */}
-                {teamBuilderTopTab === 'management' && (
+                {teamBuilderActiveTab === 'management' && (
                     <div className="animate-fadeIn space-y-8">
                         <section>
                             <h2 className="text-2xl font-bold text-emerald-400 mb-4">My Team</h2>
@@ -447,16 +434,18 @@ const App: React.FC = () => {
                         <section>
                             <h2 className="text-xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-400 mb-2">Team Prospector</h2>
                             <TeamProspector 
+                                team={team}
                                 onAbilityClick={handleAbilityNameClick}
                                 likedPokemonMap={likedPokemonMap}
                                 onToggleLiked={toggleLikedPokemon}
                                 onPokemonClick={handleOpenPokemonDetail}
+                                onAddToTeam={addTeamMember}
                             />
                         </section>
                     </div>
                 )}
 
-                {teamBuilderTopTab === 'story' && (
+                {teamBuilderActiveTab === 'story' && (
                     <div className="animate-fadeIn">
                         <StoryHelper
                           checkpoints={SCARLET_VIOLET_PROGRESSION}
@@ -485,6 +474,23 @@ const App: React.FC = () => {
                         />
                     </div>
                 )}
+
+                {teamBuilderActiveTab === 'navigator' && (
+                    <div className="animate-fadeIn">
+                         <NavigatorDisplay
+                            initialPromptValue={navigatorUserPrompt}
+                            onPromptSubmit={handleNavigatorSubmit}
+                            isLoading={isLoadingNavigatorQuery}
+                            apiResponse={navigatorGeminiResponse}
+                            apiError={navigatorError}
+                            onReset={handleNavigatorReset}
+                            apiKeyMissing={apiKeyMissing}
+                            onPokemonNameClick={handleOpenPokemonDetail}
+                            onLocationNameClick={handleLocationSelectionAndCollapse}
+                            gameLocations={SCARLET_VIOLET_PROGRESSION}
+                        />
+                    </div>
+                )}
           </div>
         );
       default:
@@ -502,12 +508,6 @@ const App: React.FC = () => {
                 </button>
             </div>
             <div className={`p-4 space-y-3 flex-grow overflow-y-auto ${isLeftSidebarCollapsed ? 'hidden' : 'block'}`}>
-              <button
-                onClick={handleSwitchToNavigatorAndCollapse}
-                className="w-full text-left px-4 py-2 rounded-lg transition-colors bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 font-semibold"
-              >
-                Nuzlocke Navigator
-              </button>
               <button
                 onClick={handleSwitchToTeamBuilderAndCollapse}
                 className="w-full text-left px-4 py-2 rounded-lg transition-colors bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 font-semibold"
@@ -527,12 +527,14 @@ const App: React.FC = () => {
       
       <main className="flex-1 flex flex-col bg-slate-900/80">
         <div className="flex-grow p-4 md:p-6 overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-                 <div className="flex items-center gap-2">
-                    <button onClick={handlePreviousLocation} disabled={isFirstLocationSelected || noLocationSelected} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors">&larr; Prev</button>
-                    <button onClick={handleNextLocation} disabled={isLastLocationSelected} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Next &rarr;</button>
-                 </div>
-            </div>
+            {activeMainPanel === 'location' && (
+                <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2">
+                        <button onClick={handlePreviousLocation} disabled={isFirstLocationSelected || noLocationSelected} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors">&larr; Prev</button>
+                        <button onClick={handleNextLocation} disabled={isLastLocationSelected} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Next &rarr;</button>
+                    </div>
+                </div>
+            )}
             {renderMainPanel()}
         </div>
       </main>

@@ -75,18 +75,17 @@ export const useGameProgression = (
     }
 
     if (locationToSelect) {
-      setCurrentLocationIdState(locationToSelect.id); 
-      // Do not auto-select or change panel here if it's 'starterSelection'
-      if (activeMainPanel !== 'starterSelection') {
-        handleSelectLocation(locationToSelect);
-      } else if (!selectedLocation) { // If starter selection is active but no location selected yet, prime it.
+      setCurrentLocationIdState(locationToSelect.id);
+      
+      // On initial load, we set the selected location but *don't* switch the panel.
+      // The panel defaults to 'teamBuilder' from useNavigator.
+      // This ensures the correct location is highlighted in the sidebar and available
+      // for context without forcing the user away from the team builder.
+      if (!selectedLocation) {
         setSelectedLocation(locationToSelect);
       }
     } else {
-      // No valid location found, ensure panel is location and states are cleared
-      if (activeMainPanel !== 'starterSelection') {
-        setActiveMainPanel('location');
-      }
+      // No valid location found, clear states but don't change panel
       setSelectedLocation(null);
       setLocationDetails(null);
       setLocationError(null);

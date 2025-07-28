@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect, useCallback } from 'react';
 import { TeamMember, CaughtStatusMap, AddTeamMemberData } from '../types';
 import { CAUGHT_POKEMON_STORAGE_KEY, TEAM_STORAGE_KEY } from '../constants';
@@ -9,7 +8,14 @@ export const useTeamManager = () => {
   const [team, setTeam] = useState<TeamMember[]>(() => {
     try {
       const storedTeam = localStorage.getItem(TEAM_STORAGE_KEY);
-      return storedTeam ? JSON.parse(storedTeam) : [];
+      const parsedTeam = storedTeam ? JSON.parse(storedTeam) : [];
+      
+      // One-time check for legacy data
+      if (parsedTeam.length > 0 && parsedTeam.some((m: Partial<TeamMember>) => !m.types)) {
+        console.warn("Legacy team data detected. Types will be missing for some team members until they are re-added or updated.");
+      }
+      return parsedTeam;
+
     } catch (e) {
       console.error("Failed to load team from localStorage", e);
       return [];
@@ -47,18 +53,34 @@ export const useTeamManager = () => {
     setCaughtPokemon(prev => ({ ...prev, [idStr]: !prev[idStr] }));
   }, []);
 
-  const addTeamMember = useCallback((memberData: AddTeamMemberData) => {
+  const addTeamMember = useCallback((memberData: AddTeamMemberData): boolean => {
+    if (team.length >= 6) {
+        alert("Your team is full (6 Pokémon maximum)!");
+        return false;
+    }
+    if (memberData.pokemonId && team.some(member => member.pokemonId === memberData.pokemonId)) {
+        alert(`${memberData.species} is already on your team!`);
+        return false;
+    }
+
     const newMoves = ['', '', '', ''];
     if (memberData.initialMove) { newMoves[0] = memberData.initialMove; }
-    setTeam(prevTeam => [
-        ...prevTeam,
-        {
-            id: Date.now().toString(), species: memberData.species, level: memberData.level,
-            nickname: memberData.nickname || memberData.species, heldItem: '', moves: newMoves,
-            isShiny: false, pokemonId: memberData.pokemonId
-        }
-    ]);
-  }, []);
+
+    const newMember: TeamMember = {
+        id: Date.now().toString(),
+        species: memberData.species,
+        level: memberData.level,
+        nickname: memberData.nickname || memberData.species,
+        heldItem: '',
+        moves: newMoves,
+        isShiny: false,
+        pokemonId: memberData.pokemonId,
+        types: memberData.types
+    };
+    
+    setTeam(prevTeam => [...prevTeam, newMember]);
+    return true;
+  }, [team]);
   
   const removeTeamMember = useCallback((id: string) => {
     setTeam(prevTeam => prevTeam.filter(member => member.id !== id));

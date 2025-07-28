@@ -1,5 +1,6 @@
 
 
+
 import React, { useEffect, useState } from 'react';
 import { PokemonDetailData, PokemonBaseStat, PokemonMoveInfo, PokemonEvolutionStep, PokemonDetailBarProps } from '../types';
 
@@ -150,7 +151,7 @@ export const PokemonDetailBarComponent: React.FC<PokemonDetailBarProps> = ({
                 {isCaught ? '✓ Caught' : 'Mark as Caught'}
                 </button>
                 <button
-                    onClick={() => onAddToTeam(pokemonData.name, pokemonData.id)}
+                    onClick={() => onAddToTeam(pokemonData.name, pokemonData.id, pokemonData.types)}
                     className="w-full sm:w-auto flex-grow sm:flex-grow-0 py-1.5 px-3 text-xs rounded-md font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
                 >
                     Add to Party

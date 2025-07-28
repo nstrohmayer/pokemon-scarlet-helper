@@ -1,7 +1,21 @@
 
 
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { TeamMember, TeamManagerProps, AddTeamMemberData } from '../types';
+import { POKEMON_TYPES, TYPE_EFFECTIVENESS_CHART } from '../constants';
+
+const TypeBadge: React.FC<{ type: string; className?: string }> = ({ type, className = '' }) => {
+    const typeColors: Record<string, string> = {
+        Normal: 'bg-gray-400 text-black', Fighting: 'bg-red-700 text-white', Flying: 'bg-sky-300 text-black',
+        Poison: 'bg-purple-600 text-white', Ground: 'bg-yellow-600 text-black', Rock: 'bg-yellow-700 text-white',
+        Bug: 'bg-lime-500 text-white', Ghost: 'bg-indigo-700 text-white', Steel: 'bg-slate-400 text-white', Fire: 'bg-orange-500 text-white',
+        Water: 'bg-blue-500 text-white', Grass: 'bg-green-500 text-white', Electric: 'bg-yellow-400 text-black',
+        Psychic: 'bg-pink-500 text-white', Ice: 'bg-cyan-300 text-black', Dragon: 'bg-indigo-500 text-white',
+        Dark: 'bg-neutral-700 text-white', Fairy: 'bg-pink-300 text-black',
+    };
+    return <span className={`px-2 py-1 rounded-full text-xs font-semibold ${typeColors[type] || 'bg-gray-500 text-white'} ${className}`}>{type}</span>;
+}
 
 interface PokemonTeamCardProps {
    member: TeamMember;
@@ -135,6 +149,35 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
     onUpdateTeamMemberMove,
     onToggleTeamMemberShiny
 }) => {
+    const teamWeaknesses = useMemo(() => {
+        const weaknesses: Record<string, { count: number; effectiveness: number[] }> = {};
+        const allTypes = POKEMON_TYPES;
+
+        for (const attackingType of allTypes) {
+            for (const member of team) {
+                if (!member.types || member.types.length === 0) continue;
+
+                const memberTypes = member.types.map(t => t.charAt(0).toUpperCase() + t.slice(1));
+                
+                let totalMultiplier = 1;
+                for (const defendingType of memberTypes) {
+                    const effectiveness = TYPE_EFFECTIVENESS_CHART[attackingType]?.[defendingType];
+                    if (effectiveness !== undefined) {
+                        totalMultiplier *= effectiveness;
+                    }
+                }
+
+                if (totalMultiplier >= 2) {
+                    if (!weaknesses[attackingType]) {
+                        weaknesses[attackingType] = { count: 0, effectiveness: [] };
+                    }
+                    weaknesses[attackingType].count++;
+                    weaknesses[attackingType].effectiveness.push(totalMultiplier);
+                }
+            }
+        }
+        return weaknesses;
+    }, [team]);
 
   return (
     <div className="space-y-6">
@@ -177,7 +220,31 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
           </div>
         )}
       </div>
-      {/* Manual Add Pokemon Form Removed */}
+
+       {team.length > 0 && (
+            <div className="mt-6">
+                <h3 className="text-xl font-bold text-emerald-400 mb-3">Team Weaknesses</h3>
+                <div className="bg-slate-700/60 p-4 rounded-lg border border-slate-600/70">
+                    {Object.keys(teamWeaknesses).length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-3">
+                            {Object.entries(teamWeaknesses).sort((a,b) => b[1].count - a[1].count).map(([type, data]) => {
+                                const isMajorWeakness = data.effectiveness.some(e => e >= 4);
+                                return (
+                                    <div key={type} className="flex items-center gap-2 bg-slate-800/50 p-2 rounded-md">
+                                        <TypeBadge type={type} />
+                                        <span className={`text-sm font-semibold ${isMajorWeakness ? 'text-red-400' : 'text-slate-200'}`}>
+                                            {data.count}x
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-slate-400 italic">This team has no shared weaknesses!</p>
+                    )}
+                </div>
+            </div>
+        )}
     </div>
   );
 };
