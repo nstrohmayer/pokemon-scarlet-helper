@@ -62,13 +62,14 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
     const [error, setError] = useState<string | null>(null);
     
     const [filters, setFilters] = useState<ProspectorFilters>({
-        generation: null,
+        generation: 9, // Default to Paldea (Gen 9)
         type: null,
         isFullyEvolvedOnly: false,
     });
     const [showShiny, setShowShiny] = useState<boolean>(false);
     
-    const [prospectList, setProspectList] = useState<{ name: string; id: number }[]>([]);
+    const [prospectList, setProspectList] = useState<{ name: string; id: number }[]>([]); // The visible list
+    const [allProspects, setAllProspects] = useState<{ name: string; id: number }[]>([]); // The full list from AI
     const [currentIndex, setCurrentIndex] = useState(0);
 
     const [lookupQuery, setLookupQuery] = useState('');
@@ -80,6 +81,12 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
         setFilters(prev => ({ ...prev, [key]: value }));
     }, []);
 
+    const handleLoadMore = () => {
+        const currentLength = prospectList.length;
+        const nextBatch = allProspects.slice(currentLength, currentLength + 10);
+        setProspectList(prev => [...prev, ...nextBatch]);
+    };
+
     const handleSuggestTeammates = async () => {
         if (team.length === 0) {
             setError("Add Pokémon to your team before asking for suggestions.");
@@ -89,12 +96,14 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
         setError(null);
         setProspect(null);
         setProspectList([]);
+        setAllProspects([]);
         try {
             const namesAndIds = await fetchTeamSuggestionsFromAI(team);
             if (namesAndIds.length === 0) {
                 throw new Error("The AI couldn't find any specific suggestions for your current team.");
             }
-            setProspectList(namesAndIds);
+            setAllProspects(namesAndIds);
+            setProspectList(namesAndIds.slice(0, 10)); // Set initial batch
             setCurrentIndex(0);
         } catch (err) {
             setError(err instanceof Error ? err.message : "An unknown error occurred while fetching suggestions.");
@@ -109,12 +118,14 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
             setError(null);
             setProspect(null);
             setProspectList([]);
+            setAllProspects([]); // Reset lists on filter change
             try {
                 const namesAndIds = await fetchProspectsFromAI(filters);
                 if (namesAndIds.length === 0) {
                     throw new Error("No Pokémon found matching your criteria. Please adjust filters.");
                 }
-                setProspectList(namesAndIds);
+                setAllProspects(namesAndIds);
+                setProspectList(namesAndIds.slice(0, 10)); // Set initial batch
                 setCurrentIndex(0);
             } catch (err) {
                 setError(err instanceof Error ? err.message : "An unknown error occurred while fetching the list.");
@@ -139,6 +150,11 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
         const getProspectDetails = async () => {
             setIsLoading(true);
             setError(null);
+             if (currentIndex >= prospectList.length) {
+                console.warn("Current index out of bounds, resetting to 0.");
+                setCurrentIndex(0);
+                return;
+            }
             const pokemonName = prospectList[currentIndex].name;
             try {
                 const data = await fetchPokemonDetails(pokemonName);
@@ -193,14 +209,10 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
         try {
             const data = await fetchPokemonDetails(pokemonNameToFind.trim());
             setProspect(data);
-            const foundIndex = prospectList.findIndex(p => p.id === data.id);
-            if (foundIndex !== -1) {
-                setCurrentIndex(foundIndex);
-            } else {
-                // If not in the current list, just show the single prospect
-                setProspectList([{ name: data.name, id: data.id }]);
-                setCurrentIndex(0);
-            }
+            const singleProspect = { name: data.name, id: data.id };
+            setAllProspects([singleProspect]);
+            setProspectList([singleProspect]);
+            setCurrentIndex(0);
         } catch (err) {
             setError(err instanceof Error ? err.message : `Could not find "${pokemonNameToFind.trim()}".`);
             setProspect(null);
@@ -246,7 +258,7 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
     };
 
     const renderCardContent = () => {
-        if (isLoading) {
+        if (isLoading && !prospect) {
             return (
                 <div className="flex flex-col items-center justify-center h-full">
                     <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-sky-400"></div>
@@ -383,42 +395,54 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
                 {/* Left Column: List of Prospects */}
                 <div className="w-full lg:w-1/3 xl:w-1/4 hidden lg:block">
                     <h3 className="text-lg font-bold text-sky-300 mb-2">
-                        Prospects ({prospectList.length})
+                        Prospects ({isLoading ? '...' : allProspects.length})
                     </h3>
-                    <div className="bg-slate-700/50 rounded-lg p-2 h-[420px] overflow-y-auto border border-slate-600/50">
-                        {isLoading && prospectList.length === 0 && (
-                            <div className="text-center text-slate-400 p-4">Loading list...</div>
+                    <div className="bg-slate-700/50 rounded-lg p-2 h-[420px] border border-slate-600/50 flex flex-col">
+                         <div className="flex-grow overflow-y-auto pr-1">
+                            {isLoading && prospectList.length === 0 && (
+                                <div className="text-center text-slate-400 p-4">Loading list...</div>
+                            )}
+                            {error && prospectList.length === 0 && (
+                                <div className="text-center text-red-400 p-4">Error loading list.</div>
+                            )}
+                            {prospectList.length > 0 ? (
+                                <ul className="space-y-1">
+                                    {prospectList.map((p, index) => (
+                                        <li key={p.id}>
+                                            <button
+                                                onClick={() => setCurrentIndex(index)}
+                                                className={`w-full flex items-center gap-2 p-2 rounded-md text-left transition-colors ${
+                                                    index === currentIndex
+                                                    ? 'bg-sky-600 text-white shadow-md'
+                                                    : 'hover:bg-slate-600/60'
+                                                }`}
+                                            >
+                                                <img 
+                                                    src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
+                                                    alt="" 
+                                                    className="w-8 h-8 pixelated-sprite" 
+                                                    loading="lazy"
+                                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                />
+                                                <span className="text-sm font-medium">{p.name}</span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : !isLoading && !error ? (
+                                <div className="text-center text-slate-400 p-4">No Pokémon found.</div>
+                            ) : null}
+                        </div>
+                        {prospectList.length < allProspects.length && (
+                            <div className="pt-2 flex-shrink-0">
+                                <button
+                                    onClick={handleLoadMore}
+                                    className="w-full px-3 py-1.5 bg-sky-700 hover:bg-sky-600 text-white rounded-md text-xs font-semibold"
+                                >
+                                    Load More ({prospectList.length} / {allProspects.length})
+                                </button>
+                            </div>
                         )}
-                        {error && prospectList.length === 0 && (
-                             <div className="text-center text-red-400 p-4">Error loading list.</div>
-                        )}
-                        {prospectList.length > 0 ? (
-                            <ul className="space-y-1">
-                                {prospectList.map((p, index) => (
-                                    <li key={p.id}>
-                                        <button
-                                            onClick={() => setCurrentIndex(index)}
-                                            className={`w-full flex items-center gap-2 p-2 rounded-md text-left transition-colors ${
-                                                index === currentIndex
-                                                ? 'bg-sky-600 text-white shadow-md'
-                                                : 'hover:bg-slate-600/60'
-                                            }`}
-                                        >
-                                            <img 
-                                                src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`} 
-                                                alt="" 
-                                                className="w-8 h-8 pixelated-sprite" 
-                                                loading="lazy"
-                                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                            />
-                                            <span className="text-sm font-medium">{p.name}</span>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : !isLoading && !error ? (
-                            <div className="text-center text-slate-400 p-4">No Pokémon found.</div>
-                        ) : null}
                     </div>
                 </div>
                 
