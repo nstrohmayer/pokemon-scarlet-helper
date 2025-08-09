@@ -38,6 +38,12 @@ export type CaughtStatusMap = Record<string, boolean>;
 export type LikedPokemonMap = Record<string, boolean>;
 export type HuntingListMap = Record<string, { pokemonId: number; pokemonName: string }[]>;
 
+// === State Syncing ===
+export interface AppState {
+    [key: string]: string;
+}
+
+
 // === Component Props ===
 
 // --- App Structure ---

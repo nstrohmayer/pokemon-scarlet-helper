@@ -1,7 +1,4 @@
-
-
-
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameLocationNode, DetailedLocationInfo } from '../types';
 import { SCARLET_VIOLET_PROGRESSION, CURRENT_LOCATION_ID_STORAGE_KEY, DEFAULT_CURRENT_LOCATION_ID } from '../constants';
 import { fetchLocationDetailsFromGemini } from '../services/geminiService';
@@ -18,10 +15,23 @@ export const useGameProgression = (
   const [isLoadingLocation, setIsLoadingLocation] = useState<boolean>(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  const [levelCap, setLevelCap] = useState<number | null>(null);
-  const [nextBattleName, setNextBattleName] = useState<string | null>(null);
-  const [nextBattleLocation, setNextBattleLocation] = useState<string | null>(null);
-  const [nextBattlePokemonCount, setNextBattlePokemonCount] = useState<number | null>(null);
+  const progressionInfo = useMemo(() => {
+    let levelCap: number | null = null;
+    let nextBattleName: string | null = null;
+    let nextBattleLocation: string | null = null;
+    let nextBattlePokemonCount: number | null = null;
+
+    for (const location of SCARLET_VIOLET_PROGRESSION) {
+      if (location.significantBattleLevel && !completedBattles.has(location.id)) {
+        levelCap = location.significantBattleLevel;
+        nextBattleName = location.significantBattleName || "Significant Battle";
+        nextBattleLocation = location.name;
+        nextBattlePokemonCount = location.significantBattlePokemonCount || null;
+        break; // Found the next uncompleted battle
+      }
+    }
+    return { levelCap, nextBattleName, nextBattleLocation, nextBattlePokemonCount };
+  }, [completedBattles]);
 
   const handleSelectLocation = useCallback((location: GameLocationNode) => {
     setSelectedLocation(location);
@@ -104,26 +114,6 @@ export const useGameProgression = (
       currentIndex = SCARLET_VIOLET_PROGRESSION.findIndex(loc => loc.id === selectedLocation.id);
     }
 
-    // Update Level Cap and Next Battle Info based on completed battles
-    let nextCap: number | null = null;
-    let battleName: string | null = null;
-    let battleLoc: string | null = null;
-    let battlePokemonCount: number | null = null;
-
-    for (const location of SCARLET_VIOLET_PROGRESSION) {
-      if (location.significantBattleLevel && !completedBattles.has(location.id)) {
-        nextCap = location.significantBattleLevel;
-        battleName = location.significantBattleName || "Significant Battle";
-        battleLoc = location.name;
-        battlePokemonCount = location.significantBattlePokemonCount || null;
-        break; // Found the next uncompleted battle
-      }
-    }
-    setLevelCap(nextCap);
-    setNextBattleName(battleName);
-    setNextBattleLocation(battleLoc);
-    setNextBattlePokemonCount(battlePokemonCount);
-
     if (selectedLocation && activeMainPanel === 'location') {
       const fetchAllDetails = async () => {
         setIsLoadingLocation(true);
@@ -167,7 +157,7 @@ export const useGameProgression = (
         setLocationError(null); 
         setIsLoadingLocation(false); // Ensure loading is false if no location is selected
     }
-  }, [selectedLocation, activeMainPanel, completedBattles]); // Re-run when selectedLocation or panel changes
+  }, [selectedLocation, activeMainPanel]); // Re-run when selectedLocation or panel changes
 
   return {
     selectedLocation,
@@ -175,10 +165,10 @@ export const useGameProgression = (
     locationDetails,
     isLoadingLocation,
     locationError,
-    levelCap,
-    nextBattleName,
-    nextBattleLocation,
-    nextBattlePokemonCount,
+    levelCap: progressionInfo.levelCap,
+    nextBattleName: progressionInfo.nextBattleName,
+    nextBattleLocation: progressionInfo.nextBattleLocation,
+    nextBattlePokemonCount: progressionInfo.nextBattlePokemonCount,
     handleSelectLocation,
     currentLocationId,
     setCurrentLocation,

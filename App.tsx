@@ -15,6 +15,7 @@ import { StoryHelper } from './components/StoryHelper';
 import { LikedPokemonDisplay } from './components/LikedPokemonDisplay';
 import { HuntingListDisplay } from './components/HuntingListDisplay';
 import { PokemonDetailLookup } from './components/PokemonDetailLookup';
+import { LockscreenManager } from './components/LockscreenManager';
 
 
 import { useTeamManager } from './hooks/useTeamManager';
@@ -519,21 +520,24 @@ const App: React.FC = () => {
                      {isLeftSidebarCollapsed ? '»' : '«'}
                 </button>
             </div>
-            <div className={`p-4 space-y-3 flex-grow overflow-y-auto ${isLeftSidebarCollapsed ? 'hidden' : 'block'}`}>
-              <button
-                onClick={handleSwitchToTeamBuilderAndCollapse}
-                className="w-full text-left px-4 py-2 rounded-lg transition-colors bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 font-semibold"
-              >
-                Team Builder
-              </button>
-               <div className="border-t border-slate-700 my-4"></div>
-                <GameProgressionTree
-                    locations={SCARLET_VIOLET_PROGRESSION}
-                    selectedLocationId={selectedLocation?.id ?? null}
-                    onSelectLocation={handleLocationSelectionAndCollapse}
-                    currentLocationId={currentLocationId}
-                    onSetCurrentLocation={setCurrentLocation}
-                />
+            <div className={`flex-grow overflow-y-auto ${isLeftSidebarCollapsed ? 'hidden' : 'block'}`}>
+                <div className="p-4 space-y-3">
+                    <button
+                        onClick={handleSwitchToTeamBuilderAndCollapse}
+                        className="w-full text-left px-4 py-2 rounded-lg transition-colors bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 font-semibold"
+                    >
+                        Team Builder
+                    </button>
+                    <LockscreenManager />
+                    <div className="border-t border-slate-700 my-4"></div>
+                    <GameProgressionTree
+                        locations={SCARLET_VIOLET_PROGRESSION}
+                        selectedLocationId={selectedLocation?.id ?? null}
+                        onSelectLocation={handleLocationSelectionAndCollapse}
+                        currentLocationId={currentLocationId}
+                        onSetCurrentLocation={setCurrentLocation}
+                    />
+                </div>
             </div>
        </aside>
       
