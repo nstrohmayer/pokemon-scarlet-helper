@@ -33,13 +33,31 @@ interface CacheEntry<T> {
 }
 
 async function fetchPokeApi<T>(endpoint: string): Promise<T> {
-  const response = await fetch(`${POKEAPI_BASE_URL}/${endpoint}`);
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
-    throw new Error(`PokeAPI request failed for ${endpoint}: ${response.status} ${response.statusText} - ${errorData.detail || errorData.message}`);
-  }
-  return response.json() as T;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+
+    try {
+        const response = await fetch(`${POKEAPI_BASE_URL}/${endpoint}`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: "Unknown error" }));
+            throw new Error(`PokeAPI request failed for ${endpoint}: ${response.status} ${response.statusText} - ${errorData.detail || errorData.message}`);
+        }
+        return response.json() as T;
+
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error(`The request to the Pokémon API for "${endpoint}" timed out. Please try again.`);
+        }
+        // Re-throw other errors to be handled by the calling function
+        throw error;
+    }
 }
+
 
 function getCachedData<T>(cacheKey: string): T | null {
   try {
@@ -156,6 +174,7 @@ function processEvolutionChain(chain: PokeApiEvolutionChainLink, targetPokemonId
 
             return {
                 name: evoLink.species.name,
+                id: nextStageId,
                 spriteUrl: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${nextStageId}.png`,
                 trigger: capitalize(trigger),
                 conditions: conditions.map(capitalize),

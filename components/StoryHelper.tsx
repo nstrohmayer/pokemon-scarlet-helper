@@ -2,6 +2,7 @@
 
 
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { StoryHelperProps, ChatMessage, GameLocationNode, BattleStrategyDetails } from '../types';
 import { FormattedResponse } from './FormattedResponse';
@@ -237,7 +238,7 @@ export const StoryHelper: React.FC<StoryHelperProps> = ({
                                     type="text"
                                     value={newGoalText}
                                     onChange={(e) => setNewGoalText(e.target.value)}
-                                    placeholder="e.g., Beat the first gym"
+                                    placeholder="e.g., Beat the first gym, or get all eeveelutions"
                                     className="flex-grow bg-slate-700/50 border border-slate-600 rounded-md px-3 py-2 text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-sky-500 outline-none transition-colors"
                                     disabled={isAiGoalLoading}
                                 />
@@ -256,7 +257,7 @@ export const StoryHelper: React.FC<StoryHelperProps> = ({
                                         )}
                                     </button>
                                 </div>
-                                 {aiGoalError && <p className="text-red-400 text-xs mt-1">{aiGoalError}</p>}
+                                 {aiGoalError && <p className="text-red-400 text-xs mt-1 text-center">{aiGoalError}</p>}
                             </form>
                             <ul className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                 {customGoals.length > 0 ? customGoals.map(goal => (
@@ -276,17 +277,6 @@ export const StoryHelper: React.FC<StoryHelperProps> = ({
                                                 &times;
                                             </button>
                                         </div>
-                                        {goal.aiNotes && (
-                                            <div className="mt-2 ml-7 pl-3 text-xs border-l-2 border-slate-600 text-slate-400 space-y-1">
-                                                {(goal.aiLevel !== undefined && goal.aiLevel > 0) && (
-                                                    <div><strong>Lvl Cap:</strong> <span className="text-yellow-300">{goal.aiLevel}</span></div>
-                                                )}
-                                                {(goal.aiPokemonCount !== undefined && goal.aiPokemonCount > 0) && (
-                                                    <div><strong>Opponents:</strong> {goal.aiPokemonCount} Pokémon</div>
-                                                )}
-                                                <p className="italic text-slate-300">{goal.aiNotes}</p>
-                                            </div>
-                                        )}
                                     </li>
                                 )) : <p className="text-slate-400 italic text-sm text-center">No custom goals yet.</p>}
                             </ul>

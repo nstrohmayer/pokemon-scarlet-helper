@@ -1,8 +1,10 @@
 
 
+
 import { useState, useEffect, useCallback } from 'react';
 import { LikedPokemonMap, HuntingListMap } from '../types';
-import { LIKED_POKEMON_STORAGE_KEY, HUNTING_LIST_STORAGE_KEY } from '../constants';
+import { LIKED_POKEMON_STORAGE_KEY } from '../constants';
+import { huntingListService } from '../services/huntingListService';
 
 export const usePokemonCollections = () => {
   // Liked Pokémon state (using a map for O(1) lookups)
@@ -16,16 +18,8 @@ export const usePokemonCollections = () => {
     }
   });
 
-  // Hunting List state
-  const [huntingList, setHuntingList] = useState<HuntingListMap>(() => {
-    try {
-      const stored = localStorage.getItem(HUNTING_LIST_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : {};
-    } catch (e) {
-      console.error("Failed to load hunting list from localStorage", e);
-      return {};
-    }
-  });
+  // Hunting List state now comes from the service
+  const [huntingList, setHuntingList] = useState<HuntingListMap>(huntingListService.getHuntingList());
 
   // --- Persistence Effects ---
   useEffect(() => {
@@ -35,14 +29,12 @@ export const usePokemonCollections = () => {
       console.error("Failed to save liked Pokémon to localStorage", e);
     }
   }, [likedPokemonMap]);
-
+  
+  // Subscribe to huntingListService for updates
   useEffect(() => {
-    try {
-      localStorage.setItem(HUNTING_LIST_STORAGE_KEY, JSON.stringify(huntingList));
-    } catch (e) {
-      console.error("Failed to save hunting list to localStorage", e);
-    }
-  }, [huntingList]);
+    const unsubscribe = huntingListService.subscribe(setHuntingList);
+    return () => unsubscribe();
+  }, []);
 
 
   // --- Handler Functions ---
@@ -61,37 +53,11 @@ export const usePokemonCollections = () => {
   }, []);
 
   const addToHuntingList = useCallback((pokemonId: number, pokemonName: string, area: string) => {
-    setHuntingList(prev => {
-      const newHuntingList = { ...prev };
-      const areaHunts = [...(newHuntingList[area] || [])];
-      
-      // Prevent duplicates in the same area
-      if (areaHunts.some(p => p.pokemonId === pokemonId)) {
-        return prev; 
-      }
-      
-      areaHunts.push({ pokemonId, pokemonName });
-      newHuntingList[area] = areaHunts;
-      return newHuntingList;
-    });
+    huntingListService.addToHuntingList(pokemonId, pokemonName, area);
   }, []);
   
   const removeFromHuntingList = useCallback((pokemonId: number, area: string) => {
-    setHuntingList(prev => {
-        const newHuntingList = { ...prev };
-        if (!newHuntingList[area]) {
-            return prev; // Nothing to remove
-        }
-
-        newHuntingList[area] = newHuntingList[area].filter(p => p.pokemonId !== pokemonId);
-
-        // If the area is now empty, remove it from the list
-        if (newHuntingList[area].length === 0) {
-            delete newHuntingList[area];
-        }
-
-        return newHuntingList;
-    });
+    huntingListService.removeFromHuntingList(pokemonId, area);
   }, []);
 
   return {

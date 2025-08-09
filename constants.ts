@@ -162,11 +162,67 @@ export const SCARLET_VIOLET_PROGRESSION: GameLocationNode[] = [
     significantBattleName: "Final Battle (AI Turo/Sada)",
     significantBattlePokemonCount: 6
   },
+  {
+    id: "rematch-gym-cortondo",
+    name: "Rematch: Gym Leader Katy",
+    significantBattleLevel: 65,
+    significantBattleName: "Rematch: Katy (Bug)",
+    significantBattlePokemonCount: 5
+  },
+  {
+    id: "rematch-gym-artazon",
+    name: "Rematch: Gym Leader Brassius",
+    significantBattleLevel: 65,
+    significantBattleName: "Rematch: Brassius (Grass)",
+    significantBattlePokemonCount: 5
+  },
+  {
+    id: "rematch-gym-levincia",
+    name: "Rematch: Gym Leader Iono",
+    significantBattleLevel: 65,
+    significantBattleName: "Rematch: Iono (Electric)",
+    significantBattlePokemonCount: 5
+  },
+  {
+    id: "rematch-gym-cascarrafa",
+    name: "Rematch: Gym Leader Kofu",
+    significantBattleLevel: 65,
+    significantBattleName: "Rematch: Kofu (Water)",
+    significantBattlePokemonCount: 5
+  },
+  {
+    id: "rematch-gym-medali",
+    name: "Rematch: Gym Leader Larry",
+    significantBattleLevel: 65,
+    significantBattleName: "Rematch: Larry (Normal)",
+    significantBattlePokemonCount: 5
+  },
+  {
+    id: "rematch-gym-montenevera",
+    name: "Rematch: Gym Leader Ryme",
+    significantBattleLevel: 66,
+    significantBattleName: "Rematch: Ryme (Ghost)",
+    significantBattlePokemonCount: 5
+  },
+  {
+    id: "rematch-gym-alfornada",
+    name: "Rematch: Gym Leader Tulip",
+    significantBattleLevel: 66,
+    significantBattleName: "Rematch: Tulip (Psychic)",
+    significantBattlePokemonCount: 5
+  },
+  {
+    id: "rematch-gym-glaseado",
+    name: "Rematch: Gym Leader Grusha",
+    significantBattleLevel: 66,
+    significantBattleName: "Rematch: Grusha (Ice)",
+    significantBattlePokemonCount: 5
+  },
   { 
-    id: "post-game", 
-    name: "Post-Game",
+    id: "rematch-ace-tournament", 
+    name: "Academy Ace Tournament",
     significantBattleLevel: 75, 
-    significantBattleName: "Academy Ace Tournament",
+    significantBattleName: "Academy Ace Tournament (Rematch)",
     significantBattlePokemonCount: 6 // Can vary, but typically a full team
   },
 ];

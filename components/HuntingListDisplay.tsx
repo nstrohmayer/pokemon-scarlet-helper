@@ -17,7 +17,7 @@ export const HuntingListDisplay: React.FC<HuntingListDisplayProps> = ({ huntingL
                             </h3>
                             <ul className="space-y-1">
                                 {huntingList[area].map(pokemon => (
-                                    <li key={pokemon.pokemonId} className="flex items-center justify-between bg-slate-700/40 p-2 rounded-md group">
+                                    <li key={pokemon.pokemonId} className="flex items-center justify-between bg-slate-700/40 p-2 rounded-md group animate-fadeIn">
                                         <button 
                                             onClick={() => onPokemonClick(pokemon.pokemonId)}
                                             className="flex items-center gap-3 flex-grow text-left hover:text-sky-400 focus:text-sky-400 transition-colors"

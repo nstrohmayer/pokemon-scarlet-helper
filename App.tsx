@@ -1,9 +1,8 @@
 
 
 
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GameLocationNode, AddTeamMemberData, PokemonMoveInfo, StarterPokemonData } from './types';
+import { GameLocationNode, AddTeamMemberData, PokemonMoveInfo, StarterPokemonData, TeamMember } from './types';
 import { SCARLET_VIOLET_PROGRESSION, SCARLET_VIOLET_STARTERS } from './constants';
 import { GameProgressionTree } from './components/GameProgressionTree';
 import { LocationDetailsDisplay } from './components/LocationDetailsDisplay';
@@ -15,6 +14,7 @@ import { TeamProspector } from './components/TeamProspector';
 import { StoryHelper } from './components/StoryHelper';
 import { LikedPokemonDisplay } from './components/LikedPokemonDisplay';
 import { HuntingListDisplay } from './components/HuntingListDisplay';
+import { PokemonDetailLookup } from './components/PokemonDetailLookup';
 
 
 import { useTeamManager } from './hooks/useTeamManager';
@@ -37,7 +37,7 @@ const App: React.FC = () => {
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
   
   // State for Team Builder tabs
-  const [teamBuilderActiveTab, setTeamBuilderActiveTab] = useState<'management' | 'story' | 'navigator'>('management');
+  const [teamBuilderActiveTab, setTeamBuilderActiveTab] = useState<'management' | 'story' | 'navigator' | 'details'>('management');
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 768px)'); // Tailwind's 'md' breakpoint
@@ -91,6 +91,14 @@ const App: React.FC = () => {
     toggleBattleCompletion,
   } = useBattleTracker();
 
+  const handleHuntSuccess = useCallback(() => {
+    setActiveMainPanel('teamBuilder');
+    setTeamBuilderActiveTab('management');
+    if (isMobileView) {
+      setIsLeftSidebarCollapsed(true);
+    }
+  }, [isMobileView]);
+
   const {
     activeMainPanel,
     setActiveMainPanel, 
@@ -101,7 +109,7 @@ const App: React.FC = () => {
     switchToNavigatorPanel,
     handleNavigatorSubmit,
     handleNavigatorReset,
-  } = useNavigator();
+  } = useNavigator({ onHuntSuccess: handleHuntSuccess });
   
   // Ref to keep track of activeMainPanel for media query logic
   const activeMainPanelRef = React.useRef(activeMainPanel);
@@ -149,6 +157,23 @@ const App: React.FC = () => {
     handleCloseBottomBar,
     handleStageMove,
   } = useDetailBar();
+
+  // Global keydown listener for 'Escape' key
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        // If the detail bar is open, close it. This is the primary "modal".
+        if (activeBottomBarView) {
+          handleCloseBottomBar();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [activeBottomBarView, handleCloseBottomBar]);
 
   const handleLocationSelectionAndCollapse = useCallback((location: GameLocationNode) => {
     gameProgressionHook.handleSelectLocation(location);
@@ -340,6 +365,14 @@ const App: React.FC = () => {
                     >
                         Management
                     </button>
+                     <button
+                        onClick={() => setTeamBuilderActiveTab('details')}
+                        className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${
+                            teamBuilderActiveTab === 'details' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
+                        }`}
+                    >
+                        Details
+                    </button>
                     <button
                         onClick={() => setTeamBuilderActiveTab('story')}
                         className={`px-4 py-2 text-sm font-semibold rounded-t-md transition-colors ${
@@ -365,6 +398,7 @@ const App: React.FC = () => {
                             <h2 className="text-2xl font-bold text-emerald-400 mb-4">My Team</h2>
                             <TeamManager
                                 team={team}
+                                setTeam={setTeam as (team: TeamMember[]) => void}
                                 onRemoveTeamMember={removeTeamMember}
                                 IconPokeball={IconPokeball}
                                 levelCap={levelCap}
@@ -413,6 +447,15 @@ const App: React.FC = () => {
                                 onAddToTeam={addTeamMember}
                             />
                         </section>
+                    </div>
+                )}
+                
+                {teamBuilderActiveTab === 'details' && (
+                     <div className="animate-fadeIn">
+                        <PokemonDetailLookup 
+                            onAbilityClick={handleAbilityNameClick}
+                            onMoveClick={handleMoveNameClick}
+                        />
                     </div>
                 )}
 

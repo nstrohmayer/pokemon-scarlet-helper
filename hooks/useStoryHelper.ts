@@ -2,31 +2,22 @@
 
 
 
+
 import { useState, useEffect, useCallback } from 'react';
 import { StoryGoal, TeamMember, GameLocationNode, ChatMessage } from '../types';
-import { fetchGoalDetailsFromGemini, fetchChatContinuation } from '../services/geminiService';
-import { CUSTOM_GOALS_STORAGE_KEY, STORY_CHAT_HISTORY_STORAGE_KEY } from '../constants';
+import { fetchChatContinuation } from '../services/geminiService';
+import { STORY_CHAT_HISTORY_STORAGE_KEY } from '../constants';
+import { storyGoalsService } from '../services/storyGoalsService';
 
 export const useStoryHelper = (
   team: TeamMember[],
   currentLocation: GameLocationNode | null,
   nextBattle: { name: string | null; location: string | null; level: number | null }
 ) => {
-  // --- Custom Goals State ---
-  const [customGoals, setCustomGoals] = useState<StoryGoal[]>(() => {
-    try {
-      const storedGoals = localStorage.getItem(CUSTOM_GOALS_STORAGE_KEY);
-      return storedGoals ? JSON.parse(storedGoals) : [];
-    } catch (e) {
-      console.error("Failed to load story goals from localStorage", e);
-      return [];
-    }
-  });
-  
-  const [isAiGoalLoading, setIsAiGoalLoading] = useState<boolean>(false);
-  const [aiGoalError, setAiGoalError] = useState<string | null>(null);
+  // --- Custom Goals State (from service) ---
+  const [goalsState, setGoalsState] = useState(storyGoalsService.getState());
 
-  // --- Chat State ---
+  // --- Chat State (remains local to the hook) ---
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>(() => {
      try {
       const storedHistory = localStorage.getItem(STORY_CHAT_HISTORY_STORAGE_KEY);
@@ -40,14 +31,11 @@ export const useStoryHelper = (
   const [isChatLoading, setIsChatLoading] = useState<boolean>(false);
   const [chatError, setChatError] = useState<string | null>(null);
 
-  // --- Effects for Persistence ---
+  // --- Effects for Subscriptions & Persistence ---
   useEffect(() => {
-    try {
-      localStorage.setItem(CUSTOM_GOALS_STORAGE_KEY, JSON.stringify(customGoals));
-    } catch (e) {
-      console.error("Failed to save story goals to localStorage", e);
-    }
-  }, [customGoals]);
+    const unsubscribe = storyGoalsService.subscribe(setGoalsState);
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     try {
@@ -58,39 +46,22 @@ export const useStoryHelper = (
   }, [chatHistory]);
 
 
-  // --- Custom Goals Logic ---
+  // --- Custom Goals Logic (proxied to service) ---
   const addCustomGoal = useCallback((text: string) => {
-    if (text.trim()) {
-      const newGoal: StoryGoal = { id: Date.now().toString(), text: text.trim(), isCompleted: false };
-      setCustomGoals(prev => [...prev, newGoal]);
-    }
+    storyGoalsService.addCustomGoal(text);
   }, []);
 
   const addCustomGoalWithAi = useCallback(async (text: string) => {
     if (!text.trim()) return;
-    setIsAiGoalLoading(true);
-    setAiGoalError(null);
-    try {
-      const aiDetails = await fetchGoalDetailsFromGemini(text, team, currentLocation, nextBattle);
-      const newGoal: StoryGoal = {
-        id: Date.now().toString(), text: aiDetails.refinedGoalText || text, isCompleted: false,
-        aiLevel: aiDetails.level, aiPokemonCount: aiDetails.pokemonCount, aiNotes: aiDetails.notes
-      };
-      setCustomGoals(prev => [...prev, newGoal]);
-    } catch (err) {
-        console.error("Error fetching AI goal details:", err);
-        setAiGoalError(err instanceof Error ? err.message : "An unknown error occurred while thinking.");
-    } finally {
-        setIsAiGoalLoading(false);
-    }
-  }, [team, currentLocation, nextBattle]);
+    storyGoalsService.addComplexGoalFromPrompt(text);
+  }, []);
 
   const toggleCustomGoal = useCallback((id: string) => {
-    setCustomGoals(prev => prev.map(goal => goal.id === id ? { ...goal, isCompleted: !goal.isCompleted } : goal));
+    storyGoalsService.toggleCustomGoal(id);
   }, []);
 
   const deleteCustomGoal = useCallback((id: string) => {
-    setCustomGoals(prev => prev.filter(goal => goal.id !== id));
+    storyGoalsService.deleteCustomGoal(id);
   }, []);
 
   // --- Chat Logic ---
@@ -114,8 +85,8 @@ export const useStoryHelper = (
           const teamSummary = team.map(m => `{{${m.species}}} (Lvl ${m.level})`).join(', ');
           contextPrompt += `*   Current Team: ${teamSummary}\n`;
       }
-      if (customGoals.length > 0) {
-          const goalSummary = customGoals.filter(g => !g.isCompleted).map(g => g.text).join('; ');
+      if (goalsState.customGoals.length > 0) {
+          const goalSummary = goalsState.customGoals.filter(g => !g.isCompleted).map(g => g.text).join('; ');
           if (goalSummary) {
               contextPrompt += `*   My Custom Goals: ${goalSummary}\n`;
           }
@@ -151,12 +122,20 @@ export const useStoryHelper = (
         setIsChatLoading(false);
     }
 
-  }, [team, currentLocation, nextBattle, customGoals, chatHistory]);
+  }, [team, currentLocation, nextBattle, goalsState.customGoals, chatHistory]);
 
 
   return {
-    customGoals, addCustomGoal, toggleCustomGoal, deleteCustomGoal,
-    addCustomGoalWithAi, isAiGoalLoading, aiGoalError,
-    chatHistory, sendChatMessage, isChatLoading, chatError,
+    customGoals: goalsState.customGoals,
+    addCustomGoal,
+    toggleCustomGoal,
+    deleteCustomGoal,
+    addCustomGoalWithAi,
+    isAiGoalLoading: goalsState.isAiGoalLoading,
+    aiGoalError: goalsState.aiGoalError,
+    chatHistory,
+    sendChatMessage,
+    isChatLoading,
+    chatError,
   };
 };

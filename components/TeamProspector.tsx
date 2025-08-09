@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PokemonDetailData, PokemonBaseStat, TeamProspectorProps, AddTeamMemberData, ProspectorFilters } from '../types';
-import { fetchPokemonDetails, fetchAllPokemonNames } from '../services/pokeApiService';
-import { fetchProspectsFromAI, fetchTeamSuggestionsFromAI } from '../services/prospectorService';
+import { fetchAllPokemonNames } from '../services/pokeApiService';
+import { prospectorStateService } from '../services/prospectorStateService';
 import { GENERATION_BOUNDARIES, POKEMON_TYPES } from '../constants';
 
 
@@ -57,107 +57,29 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
     onPokemonClick,
     onAddToTeam
 }) => {
-    const [prospect, setProspect] = useState<PokemonDetailData | null>(null);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
-    
+    const [prospectorState, setProspectorState] = useState(prospectorStateService.getState());
+    const { prospect, isLoading, error, prospectList, currentIndex } = prospectorState;
+
+    // Local UI State
     const [filters, setFilters] = useState<ProspectorFilters>({
-        generation: null,
+        generation: 9,
         type: null,
-        isFullyEvolvedOnly: false,
+        isFullyEvolvedOnly: true,
     });
     const [showShiny, setShowShiny] = useState<boolean>(false);
     
-    const [prospectList, setProspectList] = useState<{ name: string; id: number }[]>([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
-
+    // State for Search Inputs
     const [lookupQuery, setLookupQuery] = useState('');
+    const [flexibleQuery, setFlexibleQuery] = useState('');
     const [allPokemonNames, setAllPokemonNames] = useState<string[]>([]);
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [isSuggestionsVisible, setIsSuggestionsVisible] = useState(false);
 
-    const handleFilterChange = useCallback((key: keyof ProspectorFilters, value: any) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
-    }, []);
-
-    const handleSuggestTeammates = async () => {
-        if (team.length === 0) {
-            setError("Add Pokémon to your team before asking for suggestions.");
-            return;
-        }
-        setIsLoading(true);
-        setError(null);
-        setProspect(null);
-        setProspectList([]);
-        try {
-            const namesAndIds = await fetchTeamSuggestionsFromAI(team);
-            if (namesAndIds.length === 0) {
-                throw new Error("The AI couldn't find any specific suggestions for your current team.");
-            }
-            setProspectList(namesAndIds);
-            setCurrentIndex(0);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "An unknown error occurred while fetching suggestions.");
-            setIsLoading(false);
-        }
-    };
-
-    // Effect 1: Fetch the list of prospects when filters change
+    // Subscribe to the global service for state updates
     useEffect(() => {
-        const getProspectList = async () => {
-            setIsLoading(true);
-            setError(null);
-            setProspect(null);
-            setProspectList([]);
-            try {
-                const namesAndIds = await fetchProspectsFromAI(filters);
-                if (namesAndIds.length === 0) {
-                    throw new Error("No Pokémon found matching your criteria. Please adjust filters.");
-                }
-                setProspectList(namesAndIds);
-                setCurrentIndex(0);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "An unknown error occurred while fetching the list.");
-                setIsLoading(false);
-            }
-        };
-
-        const handler = setTimeout(() => {
-             getProspectList();
-        }, 300);
-
-        return () => clearTimeout(handler);
-    }, [filters]);
-
-    // Effect 2: Fetch details for the current prospect in the list
-    useEffect(() => {
-        if (prospectList.length === 0) {
-             if (!error && !isLoading) setIsLoading(true); // Set loading only if not already in error state
-             return;
-        };
-
-        const getProspectDetails = async () => {
-            setIsLoading(true);
-            setError(null);
-            const pokemonName = prospectList[currentIndex].name;
-            try {
-                const data = await fetchPokemonDetails(pokemonName);
-                setProspect(data);
-                setShowShiny(false);
-            } catch (err) {
-                 setError(err instanceof Error ? err.message : `Failed to load details for ${pokemonName}.`);
-                 setProspect(null);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+        const unsubscribe = prospectorStateService.subscribe(setProspectorState);
+        prospectorStateService.initialize(filters); // Initialize with default filters
         
-        getProspectDetails();
-
-    }, [currentIndex, prospectList]);
-
-    // Effect 3: Fetch all names once for lookup suggestions
-    useEffect(() => {
         const loadAllNames = async () => {
             try {
                 const names = await fetchAllPokemonNames();
@@ -167,16 +89,45 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
             }
         };
         loadAllNames();
+
+        return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Effect for handling Escape key to close suggestions
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsSuggestionsVisible(false);
+            }
+        };
+        if (isSuggestionsVisible) document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isSuggestionsVisible]);
+
+
+    // --- Handlers ---
+
+    const handleFilterChange = useCallback((key: keyof ProspectorFilters, value: any) => {
+        const newFilters = { ...filters, [key]: value };
+        setFilters(newFilters);
+        // Use a timeout to debounce the AI call
+        const handler = setTimeout(() => {
+             prospectorStateService.fetchByFilters(newFilters);
+        }, 300);
+        return () => clearTimeout(handler);
+    }, [filters]);
+
+    const handleSuggestTeammates = () => {
+        if (team.length === 0) return;
+        prospectorStateService.fetchSuggestions(team);
+    };
 
     const handleLookupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const query = e.target.value;
         setLookupQuery(query);
         if (query.length > 1) {
-            const filteredSuggestions = allPokemonNames
-                .filter(name => name.toLowerCase().includes(query.toLowerCase()))
-                .slice(0, 5);
-            setSuggestions(filteredSuggestions);
+            setSuggestions(allPokemonNames.filter(name => name.toLowerCase().includes(query.toLowerCase())).slice(0, 5));
             setIsSuggestionsVisible(true);
         } else {
             setSuggestions([]);
@@ -184,48 +135,22 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
         }
     };
 
-    const executeLookup = async (pokemonNameToFind: string) => {
-        if (!pokemonNameToFind.trim() || isLoading) return;
-        setLookupQuery(pokemonNameToFind);
+    const handleLookupSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!lookupQuery.trim() || isLoading) return;
+        prospectorStateService.fetchByName(lookupQuery.trim());
         setIsSuggestionsVisible(false);
-        setIsLoading(true);
-        setError(null);
-        try {
-            const data = await fetchPokemonDetails(pokemonNameToFind.trim());
-            setProspect(data);
-            const foundIndex = prospectList.findIndex(p => p.id === data.id);
-            if (foundIndex !== -1) {
-                setCurrentIndex(foundIndex);
-            } else {
-                // If not in the current list, just show the single prospect
-                setProspectList([{ name: data.name, id: data.id }]);
-                setCurrentIndex(0);
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : `Could not find "${pokemonNameToFind.trim()}".`);
-            setProspect(null);
-        } finally {
-            setIsLoading(false);
-        }
     };
     
     const handleSuggestionClick = (suggestion: string) => {
-        executeLookup(suggestion);
+        setLookupQuery(suggestion);
+        prospectorStateService.fetchByName(suggestion);
     };
 
-    const handleLookupSubmit = (e: React.FormEvent) => {
+    const handleFlexibleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        executeLookup(lookupQuery);
-    };
-    
-    const handleNavigate = (direction: 'next' | 'previous') => {
-        if (isLoading || prospectList.length < 2) return;
-        
-        if (direction === 'next') {
-            setCurrentIndex(prev => (prev + 1) % prospectList.length);
-        } else {
-            setCurrentIndex(prev => (prev - 1 + prospectList.length) % prospectList.length);
-        }
+        if (!flexibleQuery.trim() || isLoading) return;
+        prospectorStateService.fetchByPrompt(flexibleQuery.trim());
     };
 
     const handleLike = () => {
@@ -246,7 +171,7 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
     };
 
     const renderCardContent = () => {
-        if (isLoading) {
+        if (isLoading && !prospect) {
             return (
                 <div className="flex flex-col items-center justify-center h-full">
                     <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-sky-400"></div>
@@ -258,7 +183,7 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
             return (
                 <div className="flex flex-col items-center justify-center h-full text-center p-4">
                     <p className="text-red-400 font-semibold">{error}</p>
-                    <button onClick={() => handleFilterChange('generation', filters.generation)} className="mt-4 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md">
+                    <button onClick={() => prospectorStateService.fetchByFilters(filters)} className="mt-4 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md">
                         Retry
                     </button>
                 </div>
@@ -357,26 +282,37 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
                         Suggest Teammates ✨
                     </button>
                 </div>
-                <form onSubmit={handleLookupSubmit} className="relative w-full lg:w-auto">
-                    <input
-                        type="text"
-                        value={lookupQuery}
-                        onChange={handleLookupChange}
-                        onFocus={() => setIsSuggestionsVisible(true)}
-                        onBlur={() => setTimeout(() => setIsSuggestionsVisible(false), 200)}
-                        placeholder="Find Pokémon..."
-                        className="bg-slate-700 text-sm rounded-full w-full lg:w-48 py-1.5 pl-4 pr-10 border border-slate-600 focus:ring-2 focus:ring-sky-500 outline-none"
-                    />
-                     {isSuggestionsVisible && suggestions.length > 0 && (
-                        <ul className="absolute top-full mt-1 w-full bg-slate-600 border border-slate-500 rounded-md shadow-lg z-10 overflow-hidden">
-                           {suggestions.map(s => (
-                               <li key={s} onMouseDown={() => handleSuggestionClick(s)} className="px-4 py-2 text-sm text-slate-200 hover:bg-sky-600 cursor-pointer">
-                                   {s}
-                               </li>
-                           ))}
-                        </ul>
-                    )}
-                </form>
+                <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                     <form onSubmit={handleFlexibleSubmit} className="relative w-full lg:w-auto flex-grow">
+                        <input
+                            type="text"
+                            value={flexibleQuery}
+                            onChange={(e) => setFlexibleQuery(e.target.value)}
+                            placeholder="Describe Pokémon... (e.g. paradox)"
+                            className="bg-slate-700 text-sm rounded-full w-full py-1.5 pl-4 pr-4 border border-slate-600 focus:ring-2 focus:ring-sky-500 outline-none"
+                        />
+                    </form>
+                    <form onSubmit={handleLookupSubmit} className="relative w-full lg:w-auto flex-grow">
+                        <input
+                            type="text"
+                            value={lookupQuery}
+                            onChange={handleLookupChange}
+                            onFocus={() => setIsSuggestionsVisible(true)}
+                            onBlur={() => setTimeout(() => setIsSuggestionsVisible(false), 200)}
+                            placeholder="Type name..."
+                            className="bg-slate-700 text-sm rounded-full w-full py-1.5 pl-4 pr-4 border border-slate-600 focus:ring-2 focus:ring-sky-500 outline-none"
+                        />
+                        {isSuggestionsVisible && suggestions.length > 0 && (
+                            <ul className="absolute top-full mt-1 w-full bg-slate-600 border border-slate-500 rounded-md shadow-lg z-10 overflow-hidden">
+                            {suggestions.map(s => (
+                                <li key={s} onMouseDown={() => handleSuggestionClick(s)} className="px-4 py-2 text-sm text-slate-200 hover:bg-sky-600 cursor-pointer">
+                                    {s}
+                                </li>
+                            ))}
+                            </ul>
+                        )}
+                    </form>
+                </div>
             </div>
             
             <div className="flex flex-col lg:flex-row gap-4">
@@ -386,10 +322,10 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
                         Prospects ({prospectList.length})
                     </h3>
                     <div className="bg-slate-700/50 rounded-lg p-2 h-[420px] overflow-y-auto border border-slate-600/50">
-                        {isLoading && prospectList.length === 0 && (
+                        {(isLoading && prospectList.length === 0) && (
                             <div className="text-center text-slate-400 p-4">Loading list...</div>
                         )}
-                        {error && prospectList.length === 0 && (
+                        {(error && prospectList.length === 0) && (
                              <div className="text-center text-red-400 p-4">Error loading list.</div>
                         )}
                         {prospectList.length > 0 ? (
@@ -397,7 +333,7 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
                                 {prospectList.map((p, index) => (
                                     <li key={p.id}>
                                         <button
-                                            onClick={() => setCurrentIndex(index)}
+                                            onClick={() => prospectorStateService.setCurrentIndex(index)}
                                             className={`w-full flex items-center gap-2 p-2 rounded-md text-left transition-colors ${
                                                 index === currentIndex
                                                 ? 'bg-sky-600 text-white shadow-md'
@@ -426,7 +362,7 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
                 <div className="flex-grow">
                     <div className="relative">
                         <button 
-                            onClick={() => handleNavigate('previous')} 
+                            onClick={() => prospectorStateService.navigate('previous')} 
                             disabled={isLoading || prospectList.length < 2} 
                             className="absolute left-[-1rem] top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center bg-slate-800/80 backdrop-blur-sm border border-slate-600 rounded-full text-slate-200 hover:bg-sky-500/70 hover:text-white hover:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-2xl"
                             aria-label="Previous Pokémon"
@@ -434,7 +370,7 @@ export const TeamProspector: React.FC<TeamProspectorProps> = ({
                             ‹
                         </button>
                         <button 
-                            onClick={() => handleNavigate('next')} 
+                            onClick={() => prospectorStateService.navigate('next')} 
                             disabled={isLoading || prospectList.length < 2} 
                             className="absolute right-[-1rem] top-1/2 -translate-y-1/2 z-10 w-10 h-10 flex items-center justify-center bg-slate-800/80 backdrop-blur-sm border border-slate-600 rounded-full text-slate-200 hover:bg-sky-500/70 hover:text-white hover:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-2xl"
                             aria-label="Next Pokémon"

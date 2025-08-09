@@ -5,6 +5,8 @@ interface ProxyRequest {
     params: GenerateContentParameters;
 }
 
+const PROXY_TIMEOUT_MS = 9000; // 9 seconds, must be less than client-side and default Netlify function timeout
+
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
     if (event.httpMethod !== 'POST') {
         return {
@@ -32,12 +34,29 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             };
         }
 
-        const response: GenerateContentResponse = await ai.models.generateContent(body.params);
+        const generateContentPromise = ai.models.generateContent(body.params);
         
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('AI request timed out on the server.')), PROXY_TIMEOUT_MS)
+        );
+
+        // Race the API call against our timeout
+        const response = await Promise.race([
+            generateContentPromise,
+            timeoutPromise
+        ]) as GenerateContentResponse;
+        
+        // Manually construct a plain object to ensure serialization is safe and lean.
         const serializableResponse = {
-            text: response.text, // This calls the getter
-            candidates: response.candidates,
-            promptFeedback: response.promptFeedback,
+            text: response.text, // The getter is called here, result is a string
+            candidates: response.candidates?.map(c => ({
+                finishReason: c.finishReason,
+                finishMessage: c.finishMessage,
+            })),
+            promptFeedback: response.promptFeedback ? {
+                blockReason: response.promptFeedback.blockReason,
+                blockReasonMessage: response.promptFeedback.blockReasonMessage,
+            } : undefined,
         };
 
         return {

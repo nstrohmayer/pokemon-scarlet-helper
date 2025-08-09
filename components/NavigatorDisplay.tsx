@@ -31,6 +31,17 @@ export const NavigatorDisplay: React.FC<NavigatorDisplayProps> = ({
     onReset();
   };
 
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        // Programmatically submit the form to trigger the onSubmit handler,
+        // but only if there's content and we're not already loading.
+        if (currentPrompt.trim() && !isLoading && e.currentTarget.form) {
+            e.currentTarget.form.requestSubmit();
+        }
+    }
+  };
+
   return (
     <div className="p-2 md:p-4 space-y-6 animate-fadeIn">
       <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-500">
@@ -38,21 +49,22 @@ export const NavigatorDisplay: React.FC<NavigatorDisplayProps> = ({
       </h1>
       
       <p className="text-slate-300 text-sm md:text-base">
-        Ask any question related to your Pokémon Scarlet and Violet Nuzlocke! 
-        For example: "What are good counters for the Cortondo Gym?", "Where can I find a specific TM early?", or "Tips for an upcoming rival battle?".
+        Ask any question related to your Pokémon Scarlet and Violet Nuzlocke, or use special commands!
+        For example, ask "What are good counters for the Cortondo Gym?", or use a command like "I want to hunt all the paldean starters".
       </p>
 
-      {!apiResponse && !apiError && (
+      {!apiResponse && !apiError && !isLoading && (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="navigatorPrompt" className="block text-sm font-medium text-sky-300 mb-1">
-              Your Question:
+              Your Question or Command:
             </label>
             <textarea
               id="navigatorPrompt"
               value={currentPrompt}
               onChange={(e) => setCurrentPrompt(e.target.value)}
-              placeholder="Enter your Pokémon Scarlet and Violet Nuzlocke question here..."
+              onKeyDown={handleTextareaKeyDown}
+              placeholder="Enter your question or command here..."
               rows={4}
               className="w-full p-3 bg-slate-700/50 border border-slate-600 rounded-md text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-colors"
               disabled={isLoading}

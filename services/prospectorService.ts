@@ -5,6 +5,7 @@ import { callGeminiProxy } from './geminiService'; // Import the proxy helper
 
 // --- Caching Setup ---
 const CACHE_PREFIX_PROSPECTOR_LIST = "prospector_list_cache_sv_";
+const CACHE_PREFIX_PROSPECTOR_PROMPT = "prospector_prompt_cache_sv_";
 const CACHE_PREFIX_SUGGESTIONS = "prospector_suggestions_cache_sv_";
 const CACHE_EXPIRATION_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -104,6 +105,92 @@ export const fetchProspectsFromAI = async (filters: ProspectorFilters): Promise<
         throw new Error(errorMessage);
     }
 };
+
+export const fetchProspectsByPromptFromAI = async (prompt: string): Promise<{ name: string; id: number }[]> => {
+    const cacheKey = `${CACHE_PREFIX_PROSPECTOR_PROMPT}${prompt.toLowerCase().replace(/\s+/g, '_').substring(0, 100)}_v1`;
+
+    try {
+        const cachedItem = localStorage.getItem(cacheKey);
+        if (cachedItem) {
+            const cacheEntry = JSON.parse(cachedItem);
+            if (Date.now() - cacheEntry.timestamp < CACHE_EXPIRATION_MS) {
+                console.log(`Serving prospector prompt list for "${prompt}" from cache.`);
+                return cacheEntry.data;
+            }
+        }
+    } catch (e) {
+        console.warn("Error reading prospector prompt cache", e);
+    }
+    
+    const systemInstruction = `
+        You are an expert Pokémon data extractor. The user will provide a prompt describing a group of Pokémon.
+        Your task is to identify all Pokémon that match the description and return them as a JSON array of objects.
+        Each object must have a "name" (official English name) and an "id" (official National Pokédex number).
+        Order the results by National Pokédex number.
+        Examples:
+        - Prompt: "paradox pokemon" -> should return Roaring Moon, Iron Valiant, etc.
+        - Prompt: "eevee evolutions" -> should return Vaporeon, Jolteon, Flareon, etc.
+        - Prompt: "all legendary pokemon from sinnoh" -> should return Dialga, Palkia, Giratina, etc.
+        If you cannot identify any Pokémon, return an empty array. Do not add any text outside the JSON array.
+    `;
+    
+    const schema = {
+        type: Type.ARRAY,
+        description: "A list of Pokémon objects that match the user's criteria, sorted by National Pokédex number.",
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                name: {
+                    type: Type.STRING,
+                    description: "The official English name of the Pokémon."
+                },
+                id: {
+                    type: Type.NUMBER,
+                    description: "The official National Pokédex ID for the Pokémon."
+                }
+            },
+            required: ["name", "id"]
+        }
+    };
+
+    try {
+        const response = await callGeminiProxy({
+            model: GEMINI_MODEL_NAME,
+            contents: prompt,
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                temperature: 0.0
+            }
+        });
+
+        const textOutput = response.text;
+        
+        if (typeof textOutput !== 'string' || textOutput.trim() === "") {
+            throw new Error("The AI returned an empty response for your Pokémon query.");
+        }
+
+        let jsonStr = textOutput.trim();
+        const fenceRegex = /^```(?:json)?\s*\n?(.*?)\n?\s*```$/s;
+        const match = jsonStr.match(fenceRegex);
+        if (match && match[1]) {
+            jsonStr = match[1].trim();
+        }
+
+        const pokemonData = JSON.parse(jsonStr) as { name: string; id: number }[];
+
+        const cacheEntry = { timestamp: Date.now(), data: pokemonData };
+        localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
+
+        return pokemonData;
+    } catch (error) {
+        console.error("Error fetching prospects by prompt from Gemini:", error);
+        const errorMessage = error instanceof Error ? error.message : "Failed to fetch Pokémon list from AI.";
+        throw new Error(errorMessage);
+    }
+};
+
 
 export const fetchTeamSuggestionsFromAI = async (team: TeamMember[]): Promise<{ name: string; id: number }[]> => {
     if (team.length === 0) {

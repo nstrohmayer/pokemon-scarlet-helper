@@ -1,11 +1,5 @@
 
 
-
-
-
-
-
-
 import { Type, GenerateContentParameters, GenerateContentResponse } from "@google/genai";
 import { 
     DetailedLocationInfo, 
@@ -13,12 +7,12 @@ import {
     CatchablePokemonInfo, 
     TeamMember, 
     GameLocationNode, 
-    GeminiGoalResponse, 
     BattleStrategyDetails, 
     GeminiBattleStrategyResponse,
     PokemonGenerationInsights,
     GeminiPokemonInsightsResponse,
-    ChatMessage
+    ChatMessage,
+    GeminiComplexGoalResponseItem
 } from '../types';
 import { GEMINI_MODEL_NAME, SCARLET_VIOLET_PROGRESSION } from '../constants';
 
@@ -59,24 +53,45 @@ loadPreloadedData();
 // This is a representation of the serializable response from our proxy.
 interface GeminiProxyResponse {
     text: string;
-    candidates: GenerateContentResponse['candidates'];
-    promptFeedback: GenerateContentResponse['promptFeedback'];
+    candidates?: {
+        finishReason?: string;
+        finishMessage?: string;
+    }[];
+    promptFeedback?: {
+        blockReason?: string;
+        blockReasonMessage?: string;
+    };
 }
 
 export async function callGeminiProxy(params: GenerateContentParameters): Promise<GeminiProxyResponse> {
-    const proxyResponse = await fetch('/.netlify/functions/gemini-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params })
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
 
-    const responseData = await proxyResponse.json();
+    try {
+        const proxyResponse = await fetch('/.netlify/functions/gemini-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ params }),
+            signal: controller.signal // Pass the AbortSignal to fetch
+        });
 
-    if (!proxyResponse.ok) {
-        throw new Error(responseData.error || `Proxy request failed with status ${proxyResponse.status}`);
+        clearTimeout(timeoutId); // Clear the timeout if the request completes in time
+
+        const responseData = await proxyResponse.json();
+
+        if (!proxyResponse.ok) {
+            throw new Error(responseData.error || `Proxy request failed with status ${proxyResponse.status}`);
+        }
+
+        return responseData;
+    } catch (error) {
+        clearTimeout(timeoutId); // Also clear timeout on other errors
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('The request to the AI took too long and has timed out. Please try again later.');
+        }
+        // Re-throw other errors
+        throw error;
     }
-
-    return responseData;
 }
 
 
@@ -328,87 +343,67 @@ export const fetchNavigatorGuidanceFromGemini = async (userPrompt: string): Prom
   }
 };
 
-
-export const fetchGoalDetailsFromGemini = async (
-  goalText: string,
-  team: TeamMember[],
-  currentLocation: GameLocationNode | null,
-  nextBattle: { name:string | null; location: string | null; level: number | null }
-): Promise<GeminiGoalResponse> => {
-    let gameContext = `Current Location: ${currentLocation?.name || 'Not specified'}.`;
-    if (nextBattle.name && nextBattle.location && nextBattle.level) {
-        gameContext += ` Next Major Battle: ${nextBattle.name} in ${nextBattle.location} (Lvl Cap: ${nextBattle.level}).`;
-    }
-    if (team.length > 0) {
-        gameContext += ` Current Team: ${team.map(m => `${m.species} (Lvl ${m.level})`).join(', ')}.`;
-    }
-
+export const parseComplexGoalFromGemini = async (prompt: string): Promise<GeminiComplexGoalResponseItem[]> => {
     const systemInstruction = `
-        You are an AI expert for the game "Pokémon Scarlet and Violet".
-        Your task is to analyze a user's custom goal for their Nuzlocke run and provide structured, helpful data about it.
-        The user's current game context is: ${gameContext}.
-        
-        Based on the user's goal, provide the following details in a JSON object.
-        - A refined, more descriptive title for the goal.
-        - The relevant level cap for this goal.
-        - The number of Pokémon the main opponent in this goal has. If not a battle, use 0.
-        - A short, helpful strategic note for a Nuzlocke player.
-
-        Example:
-        User Goal: "beat cortondo gym"
-        Your JSON output (for the Cortondo gym):
-        {
-            "refinedGoalText": "Defeat Gym Leader Katy",
-            "level": 15,
-            "pokemonCount": 4,
-            "notes": "Katy uses Bug-types. A Fire or Flying type like Fletchling would be super effective. Watch out for her Tera Bug Teddiursa."
-        }
-
-        If the goal is vague (e.g., "get stronger"), provide a reasonable objective based on the game context, like grinding for the next battle.
-        If a goal is "Catch a Water-type", you can set level to current level cap, pokemonCount to 1, and notes on where to find one.
-        Always return a valid JSON object matching the schema. Do not add any text outside the JSON.
+      You are an AI expert for Pokémon Scarlet and Violet. The user will provide a high-level goal.
+      Your task is to break it down into a checklist of specific, actionable sub-goals.
+      For each sub-goal that involves a specific Pokémon, you MUST provide its official English name and National Pokédex ID.
+      Return the result as a JSON array of objects.
+      - If a goal is about a specific Pokémon (e.g., 'Catch Eevee'), the object MUST contain 'goalText', 'pokemonName', and 'pokemonId'.
+      - If a goal is a general task (e.g., 'Finish the main story'), the object should only contain 'goalText'.
+      Examples:
+      - User prompt: "catch all eeveelutions" -> Return JSON for Vaporeon, Jolteon, Flareon, etc., each with name and ID.
+      - User prompt: "get all legendary pokemon" -> Return JSON for Koraidon, Miraidon, the treasures of ruin, etc., each with name and ID.
+      If no specific Pokémon or tasks can be identified, return an empty array. Do not add any text outside the JSON.
     `;
     
     const schema = {
-        type: Type.OBJECT,
-        properties: {
-            refinedGoalText: { type: Type.STRING, description: "A refined, more descriptive title for the goal." },
-            level: { type: Type.NUMBER, description: "The recommended level cap for this goal. Use 0 if not applicable." },
-            pokemonCount: { type: Type.NUMBER, description: "Number of opponent Pokémon. Use 0 if not a battle." },
-            notes: { type: Type.STRING, description: "A short, helpful strategic note for a Nuzlocke player." }
-        },
-        required: ["refinedGoalText", "level", "pokemonCount", "notes"]
+        type: Type.ARRAY,
+        description: "A list of specific sub-goals derived from the user's high-level goal.",
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                goalText: {
+                    type: Type.STRING,
+                    description: "The specific, actionable text for the sub-goal. E.g., 'Catch Zapdos' or 'Complete the Indigo Disk DLC'."
+                },
+                pokemonName: {
+                    type: Type.STRING,
+                    description: "The official English name of the Pokémon involved in the goal, if any. E.g., 'Zapdos'."
+                },
+                pokemonId: {
+                    type: Type.NUMBER,
+                    description: "The official National Pokédex ID of the Pokémon, if any. E.g., 145."
+                }
+            },
+            required: ["goalText"]
+        }
     };
 
     try {
         const response = await callGeminiProxy({
             model: GEMINI_MODEL_NAME,
-            contents: `My goal is: "${goalText}"`,
+            contents: prompt,
             config: {
-                systemInstruction: systemInstruction,
+                systemInstruction,
                 responseMimeType: "application/json",
                 responseSchema: schema,
-                temperature: 0.2
+                temperature: 0.0
             }
         });
 
         const textOutput = response.text;
         
         if (typeof textOutput !== 'string' || textOutput.trim() === "") {
-             let detailedErrorMsg = `The AI did not provide any details for your goal.`;
-             if (response.promptFeedback?.blockReason) {
-                detailedErrorMsg = `Your request for goal details was blocked. Reason: ${response.promptFeedback.blockReason}. ${response.promptFeedback.blockReasonMessage || 'No additional message provided.'}`;
-            }
-            throw new Error(detailedErrorMsg);
+            throw new Error("The AI did not provide any details for your goal.");
         }
 
         const jsonStr = textOutput.trim();
-        const parsedData = JSON.parse(jsonStr) as GeminiGoalResponse;
-        
+        const parsedData = JSON.parse(jsonStr) as GeminiComplexGoalResponseItem[];
         return parsedData;
 
     } catch (error) {
-        console.error(`Error processing Gemini API response for custom goal "${goalText}":`, error);
+        console.error(`Error processing Gemini API response for complex goal "${prompt}":`, error);
         let errorMessage = `Failed to get details from AI for your goal.`;
         if (error instanceof SyntaxError) {
              errorMessage = `The AI returned invalid data for your goal. Please try a different wording.`;
@@ -418,6 +413,7 @@ export const fetchGoalDetailsFromGemini = async (
         throw new Error(errorMessage);
     }
 };
+
 
 export const fetchPokemonGenerationInsights = async (pokemonName: string): Promise<PokemonGenerationInsights> => {
     const cacheKey = `${CACHE_PREFIX_INSIGHTS}${pokemonName.toLowerCase().replace(/\s+/g, '_')}`;
@@ -637,4 +633,74 @@ export const fetchChatContinuation = async (
       console.error('Error fetching chat continuation from proxy:', error);
       throw error;
   }
+};
+
+export const parseHuntIntentFromGemini = async (prompt: string): Promise<{ name: string; id: number }[]> => {
+    const systemInstruction = `
+        You are an expert Pokémon data extractor. The user will provide a sentence expressing their desire to hunt for certain Pokémon.
+        Your task is to identify all Pokémon mentioned in the sentence and return them as a JSON array of objects.
+        Each object must have a "name" (official English name) and an "id" (official National Pokédex number).
+        For example, if the prompt is "I want to hunt for Pikachu and the Gen 1 starters", you should return:
+        [{"name": "Bulbasaur", "id": 1}, {"name": "Charmander", "id": 4}, {"name": "Squirtle", "id": 7}, {"name": "Pikachu", "id": 25}]
+        If you cannot identify any Pokémon, return an empty array. Do not add any text outside the JSON array.
+    `;
+
+    const schema = {
+        type: Type.ARRAY,
+        description: "A list of Pokémon objects identified from the user's prompt.",
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                name: {
+                    type: Type.STRING,
+                    description: "The official English name of the Pokémon."
+                },
+                id: {
+                    type: Type.NUMBER,
+                    description: "The official National Pokédex ID for the Pokémon."
+                }
+            },
+            required: ["name", "id"]
+        }
+    };
+
+    try {
+        const response = await callGeminiProxy({
+            model: GEMINI_MODEL_NAME,
+            contents: prompt,
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                temperature: 0.0,
+            }
+        });
+
+        const textOutput = response.text;
+        
+        if (typeof textOutput !== 'string' || textOutput.trim() === "") {
+            console.warn("AI returned an empty response for hunt intent, returning empty array.");
+            return [];
+        }
+
+        let jsonStr = textOutput.trim();
+        const fenceRegex = /^```(?:json)?\s*\n?(.*?)\n?\s*```$/s;
+        const match = jsonStr.match(fenceRegex);
+        if (match && match[1]) {
+            jsonStr = match[1].trim();
+        }
+        
+        const pokemonList = JSON.parse(jsonStr) as { name: string; id: number }[];
+        return pokemonList;
+
+    } catch (error) {
+        console.error("Error parsing hunt intent from Gemini:", error);
+        let errorMessage = "Failed to parse hunt intent from AI.";
+        if (error instanceof SyntaxError) {
+             errorMessage = `The AI returned invalid data. Please try rephrasing your hunt request.`;
+        } else if (error instanceof Error) {
+            errorMessage = error.message;
+        }
+        throw new Error(errorMessage);
+    }
 };
