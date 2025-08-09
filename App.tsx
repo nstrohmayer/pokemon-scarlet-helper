@@ -16,6 +16,7 @@ import { LikedPokemonDisplay } from './components/LikedPokemonDisplay';
 import { HuntingListDisplay } from './components/HuntingListDisplay';
 import { PokemonDetailLookup } from './components/PokemonDetailLookup';
 import { LockscreenManager } from './components/LockscreenManager';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
 
 
 import { useTeamManager } from './hooks/useTeamManager';
@@ -25,6 +26,7 @@ import { useDetailBar } from './hooks/useDetailBar';
 import { useStoryHelper } from './hooks/useStoryHelper';
 import { useBattleTracker } from './hooks/useBattleTracker';
 import { usePokemonCollections } from './hooks/usePokemonCollections';
+import { useI18n } from './hooks/useI18n';
 
 
 // Placeholder icons - can be moved if they grow
@@ -34,6 +36,7 @@ const IconItem = () => <span className="text-yellow-400">🛍️</span>;
 const IconBattle = () => <span className="text-purple-400">⚔️</span>;
 
 const App: React.FC = () => {
+  const { t } = useI18n();
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState<boolean>(true); 
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
   
@@ -317,13 +320,13 @@ const App: React.FC = () => {
           isLoadingLocation ? (
             <div className="flex items-center justify-center h-full">
               <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-sky-400"></div>
-              <p className="ml-4 text-lg text-slate-300">Loading Location Data...</p>
+              <p className="ml-4 text-lg text-slate-300">{t('location.loading')}</p>
             </div>
           ) : locationError ? (
             <div className="bg-red-800/30 border border-red-700 text-red-300 p-6 rounded-lg shadow-xl text-center animate-fadeIn">
-              <h1 className="text-2xl font-bold text-red-400 mb-3">Error Loading Location</h1>
+              <h1 className="text-2xl font-bold text-red-400 mb-3">{t('location.error.title')}</h1>
               <p className="text-slate-200">{locationError}</p>
-              <p className="text-slate-300 mt-2 text-sm">This could be due to an API issue or a misconfiguration. Please try selecting the location again or check your API key.</p>
+              <p className="text-slate-300 mt-2 text-sm">{t('location.error.suggestion')}</p>
             </div>
           ) : locationDetails && selectedLocation ? (
             <LocationDetailsDisplay
@@ -339,7 +342,7 @@ const App: React.FC = () => {
             />
           ) : (
              <div className="flex items-center justify-center h-full">
-              <p className="text-lg text-slate-400">Select a location from the sidebar to begin your journey.</p>
+              <p className="text-lg text-slate-400">{t('location.prompt')}</p>
             </div>
           )
         );
@@ -354,7 +357,7 @@ const App: React.FC = () => {
         return (
           <div className="animate-fadeIn">
               <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">
-                  Team Builder &amp; Tools
+                  {t('teamBuilder.title')}
               </h1>
                 {/* Top Level Tabs */}
                 <div className="flex space-x-1 border-b-2 border-slate-700 mt-4 mb-6">
@@ -364,7 +367,7 @@ const App: React.FC = () => {
                             teamBuilderActiveTab === 'management' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
                         }`}
                     >
-                        Management
+                        {t('teamBuilder.tabs.management')}
                     </button>
                      <button
                         onClick={() => setTeamBuilderActiveTab('details')}
@@ -372,7 +375,7 @@ const App: React.FC = () => {
                             teamBuilderActiveTab === 'details' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
                         }`}
                     >
-                        Details
+                        {t('teamBuilder.tabs.details')}
                     </button>
                     <button
                         onClick={() => setTeamBuilderActiveTab('story')}
@@ -380,7 +383,7 @@ const App: React.FC = () => {
                             teamBuilderActiveTab === 'story' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
                         }`}
                     >
-                        Story Helper
+                        {t('teamBuilder.tabs.storyHelper')}
                     </button>
                     <button
                         onClick={() => setTeamBuilderActiveTab('navigator')}
@@ -388,7 +391,7 @@ const App: React.FC = () => {
                             teamBuilderActiveTab === 'navigator' ? 'bg-slate-700/80 text-sky-300 border-b-2 border-sky-400' : 'text-slate-400 hover:bg-slate-800/50'
                         }`}
                     >
-                        Navigator
+                        {t('teamBuilder.tabs.navigator')}
                     </button>
                 </div>
 
@@ -396,7 +399,7 @@ const App: React.FC = () => {
                 {teamBuilderActiveTab === 'management' && (
                     <div className="animate-fadeIn space-y-8">
                         <section>
-                            <h2 className="text-2xl font-bold text-emerald-400 mb-4">My Team</h2>
+                            <h2 className="text-2xl font-bold text-emerald-400 mb-4">{t('teamManager.myTeam')}</h2>
                             <TeamManager
                                 team={team}
                                 setTeam={setTeam as (team: TeamMember[]) => void}
@@ -417,7 +420,7 @@ const App: React.FC = () => {
                         <div className="border-t-2 border-slate-700/50"></div>
                         
                         <section>
-                            <h2 className="text-xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-2">Liked Pokémon</h2>
+                            <h2 className="text-xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-2">{t('likedPokemon.title')}</h2>
                              <LikedPokemonDisplay 
                                 likedPokemonIds={Object.keys(likedPokemonMap).filter(id => likedPokemonMap[id]).map(Number)}
                                 onPokemonClick={handleOpenPokemonDetail}
@@ -427,7 +430,7 @@ const App: React.FC = () => {
                         <div className="border-t-2 border-slate-700/50"></div>
                         
                         <section>
-                            <h2 className="text-xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-rose-400 to-pink-400 mb-2">Hunting List</h2>
+                            <h2 className="text-xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-rose-400 to-pink-400 mb-2">{t('huntingList.title')}</h2>
                             <HuntingListDisplay
                                 huntingList={huntingList}
                                 onPokemonClick={handleOpenPokemonDetail}
@@ -438,7 +441,7 @@ const App: React.FC = () => {
                         <div className="border-t-2 border-slate-700/50"></div>
 
                         <section>
-                            <h2 className="text-xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-400 mb-2">Team Prospector</h2>
+                            <h2 className="text-xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-400 mb-2">{t('teamProspector.title')}</h2>
                             <TeamProspector 
                                 team={team}
                                 onAbilityClick={handleAbilityNameClick}
@@ -515,7 +518,7 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden">
        <aside className={`bg-slate-800/80 backdrop-blur-sm flex flex-col transition-all duration-300 ease-in-out ${isLeftSidebarCollapsed ? 'w-0 md:w-16' : 'w-64'} z-30 shadow-2xl`}>
             <div className="flex items-center justify-between p-4 border-b border-slate-700">
-                <h1 className={`font-bold text-lg text-sky-400 transition-opacity ${isLeftSidebarCollapsed ? 'opacity-0' : 'opacity-100'}`}>Nuzlocke</h1>
+                <h1 className={`font-bold text-lg text-sky-400 transition-opacity ${isLeftSidebarCollapsed ? 'opacity-0' : 'opacity-100'}`}>{t('app.title')}</h1>
                 <button onClick={() => setIsLeftSidebarCollapsed(!isLeftSidebarCollapsed)} className="p-1 rounded-md hover:bg-slate-700">
                      {isLeftSidebarCollapsed ? '»' : '«'}
                 </button>
@@ -526,9 +529,10 @@ const App: React.FC = () => {
                         onClick={handleSwitchToTeamBuilderAndCollapse}
                         className="w-full text-left px-4 py-2 rounded-lg transition-colors bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 font-semibold"
                     >
-                        Team Builder
+                        {t('sidebar.teamBuilder')}
                     </button>
                     <LockscreenManager />
+                    <LanguageSwitcher />
                     <div className="border-t border-slate-700 my-4"></div>
                     <GameProgressionTree
                         locations={SCARLET_VIOLET_PROGRESSION}
@@ -546,8 +550,8 @@ const App: React.FC = () => {
             {activeMainPanel === 'location' && (
                 <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-2">
-                        <button onClick={handlePreviousLocation} disabled={isFirstLocationSelected || noLocationSelected} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors">&larr; Prev</button>
-                        <button onClick={handleNextLocation} disabled={isLastLocationSelected} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Next &rarr;</button>
+                        <button onClick={handlePreviousLocation} disabled={isFirstLocationSelected || noLocationSelected} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors">&larr; {t('location.prev')}</button>
+                        <button onClick={handleNextLocation} disabled={isLastLocationSelected} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors">{t('location.next')} &rarr;</button>
                     </div>
                 </div>
             )}
