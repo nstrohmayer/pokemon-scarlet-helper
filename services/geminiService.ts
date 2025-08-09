@@ -1,5 +1,3 @@
-
-
 import { Type, GenerateContentParameters, GenerateContentResponse } from "@google/genai";
 import { 
     DetailedLocationInfo, 
@@ -65,7 +63,7 @@ interface GeminiProxyResponse {
 
 export async function callGeminiProxy(params: GenerateContentParameters): Promise<GeminiProxyResponse> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
 
     try {
         const proxyResponse = await fetch('/.netlify/functions/gemini-proxy', {

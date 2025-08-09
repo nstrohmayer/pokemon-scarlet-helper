@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useMemo } from 'react';
 import { TeamMember, TeamManagerProps } from '../types';
 import { POKEMON_TYPES, TYPE_EFFECTIVENESS_CHART } from '../constants';
@@ -17,6 +16,12 @@ const TypeBadge: React.FC<{ type: string; className?: string }> = ({ type, class
     };
     return <span className={`px-2 py-1 rounded-full text-xs font-semibold ${typeColors[type] || 'bg-gray-500 text-white'} ${className}`}>{type}</span>;
 }
+
+const SmogonIcon = () => (
+    <svg viewBox="0 0 512 512" fill="currentColor" className="w-4 h-4" aria-hidden="true" role="img">
+        <path d="M495.9,233.2c-2.3-6.1-9.9-7.9-15.9-5.6L324.7,290.4c-6.1,2.3-7.9,9.9-5.6,15.9l27.1,71.2 c2.3,6.1,9.9,7.9,15.9,5.6l143.2-53.7c6.1-2.3,7.9-9.9,5.6-15.9L495.9,233.2z M16.1,278.8c2.3,6.1,9.9,7.9,15.9,5.6l155.3-58.2 c6.1-2.3,7.9-9.9,5.6-15.9l-27.1-71.2c-2.3-6.1-9.9-7.9-15.9-5.6L16.7,185.3c-6.1,2.3-7.9,9.9-5.6,15.9L16.1,278.8z"/>
+    </svg>
+);
 
 interface PokemonTeamCardProps {
    member: TeamMember;
@@ -43,6 +48,8 @@ const PokemonTeamCard: React.FC<PokemonTeamCardProps> = ({
   const spriteUrl = member.pokemonId
     ? `${spriteBaseUrl}${member.isShiny ? 'shiny/' : ''}${member.pokemonId}.png`
     : null;
+    
+  const smogonUrl = `https://www.smogon.com/dex/sv/pokemon/${member.species.toLowerCase().replace(/\s+/g, '-')}/`;
 
   const handleLevelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newLevel = parseInt(e.target.value);
@@ -113,6 +120,16 @@ const PokemonTeamCard: React.FC<PokemonTeamCardProps> = ({
             >
                 {member.isShiny ? '🌟 Shiny' : 'Normal'}
             </button>
+            <a
+                href={smogonUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors flex items-center justify-center"
+                title={`View ${member.species} strategy on Smogon`}
+                aria-label={`View ${member.species} strategy on Smogon`}
+            >
+                <SmogonIcon />
+            </a>
           </div>
           <p className="text-xs text-sky-300">{member.species}</p>
         </div>
